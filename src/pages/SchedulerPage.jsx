@@ -394,6 +394,8 @@ export default function SchedulerPage({ role }) {
   /* ---------------- PRINT ---------------- */
   function handlePrint() {
     const deptLabel = isAllDepts ? "All Departments" : dept;
+    const banner = bannerFor(dept, isAllDepts);
+const bannerUrl = new URL(banner, window.location.origin).href;
 
     // Build "September – October 2026" or "October 2026"
     const rangeTitle = (() => {
@@ -420,7 +422,7 @@ export default function SchedulerPage({ role }) {
       .map(
         (d) => `
         <th class="day">
-          <div class="weekday">${d.weekday.toUpperCase()}</div>
+          <div class="weekday">${escapeHtml(d.weekday.toUpperCase())}</div>
           <div class="daynum">${d.day}</div>
         </th>`,
       )
@@ -468,9 +470,9 @@ export default function SchedulerPage({ role }) {
           <tr>
             <td class="num">${i + 1}</td>
             <td class="name">
-              <div class="ename">${emp.name}</div>
-              <div class="role">${emp.role}</div>
-            </td>
+  <div class="ename">${escapeHtml(emp.name)}</div>
+  <div class="role">${escapeHtml(emp.role)}</div>
+</td>
             ${cells}
             <td class="cell sum il">${il || ""}</td>
             <td class="cell sum present">${present || ""}</td>
@@ -529,7 +531,7 @@ export default function SchedulerPage({ role }) {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Schedule — ${deptLabel} — ${months[month - 1]} ${year}</title>
+  <title>Schedule — ${escapeHtml(deptLabel)} — ${months[month - 1]} ${year}</title>
   <style>
     * { box-sizing: border-box; }
     html, body {
@@ -789,11 +791,15 @@ export default function SchedulerPage({ role }) {
 <body>
   <div class="page">
     <div class="header">
-      <img src="${bannerFor(deptLabel, isAllDepts)}" alt="${deptLabel}" />
-    </div>
+  <img
+    src="${bannerUrl}"
+    alt="${escapeHtml(deptLabel)}"
+    onerror="this.style.display='none'; console.error('Print logo failed to load:', this.src);"
+  />
+</div>
 
     <div class="infobar">
-      <div class="month-title">${rangeTitle}</div>
+      <div class="month-title">${escapeHtml(rangeTitle)}</div>
 
       <div class="legend-inline">
         ${legendItems
@@ -808,19 +814,19 @@ export default function SchedulerPage({ role }) {
                     .toLowerCase()
                     .replace(/[^a-z0-9]/g, "")
                     .replace(/^(\d)/, "n$1")
-            }">${s.code}</span>
-            <span class="legend-text">
-              ${s.label}${s.time ? ` — ${s.time}` : ""}
-            </span>
+            }">${escapeHtml(s.code)}</span>
+<span class="legend-text">
+  ${escapeHtml(s.label)}${s.time ? ` — ${escapeHtml(s.time)}` : ""}
+</span>
           </span>`,
           )
           .join("")}
       </div>
 
       <div class="info-right">
-        <div class="line1">Department: <strong>${deptLabel}</strong></div>
+        <div class="line1">Department: <strong>${escapeHtml(deptLabel)}</strong></div>
         <div class="line2">
-          <strong>Period:</strong> <span class="value">${halfLabel}</span>
+          <strong>Period:</strong> <span class="value">${escapeHtml(halfLabel)}</span>
           &nbsp;•&nbsp;
           <strong>Employees:</strong> <span class="value">${visibleEmployees.length}</span>
         </div>
@@ -870,8 +876,8 @@ export default function SchedulerPage({ role }) {
         <div class="sign-space"></div>
         ${
           prepared
-            ? `<div class="name">${prepared.name}</div>
-             <div class="title">${prepared.title}</div>`
+            ? `<div class="name">${escapeHtml(prepared.name)}</div>
+             <div class="title">${escapeHtml(prepared.title)}</div>`
             : `<div class="name">&nbsp;</div>
              <div class="title">&nbsp;</div>`
         }
