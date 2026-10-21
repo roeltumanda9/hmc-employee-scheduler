@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { DEPARTMENTS } from "../lib/departments";
-import { formatName, formatRole } from "../lib/format";
+import { departmentNames, useSettings } from "../lib/settings";
+import { buildFullName, formatName, formatRole } from "../lib/format";
+import { friendlyError } from "../lib/errors";
+import { useDialog } from "../lib/useDialog";
 
 const empty = {
   first_name: "",
@@ -11,24 +13,6 @@ const empty = {
   department: "",
   role: "",
 };
-
-// "Amiscua" → "A."   /   "" → ""
-function middleInitial(middle_name) {
-  const m = (middle_name || "").trim();
-  return m ? m[0].toUpperCase() + "." : "";
-}
-
-// Builds "LAST, FIRST M." for the `name` column (all caps)
-function buildFullName({ first_name, middle_name, last_name }) {
-  const f = (first_name || "").trim();
-  const m = middleInitial(middle_name);
-  const l = (last_name || "").trim();
-
-  const firstMiddle = [f, m].filter(Boolean).join(" ");
-  if (l && firstMiddle) return `${l}, ${firstMiddle}`.toUpperCase();
-  if (l) return l.toUpperCase();
-  return firstMiddle.toUpperCase();
-}
 
 // Find the next employee number by looking at existing numbers
 async function getNextEmployeeNumber() {
@@ -47,17 +31,27 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const [loadingNumber, setLoadingNumber] = useState(false);
+  const [error, setError] = useState("");
+  const dialogRef = useDialog(open, onCancel);
+  const settings = useSettings();
+  // Inactive departments are hidden, except the one this employee is already in.
+  const departmentOptions = departmentNames(settings, {
+    activeOnly: true,
+    keep: editing?.department,
+  });
+  const titleId = useId();
 
   // Load form values when the modal opens
   useEffect(() => {
     if (!open) return;
+    setError("");
 
     if (editing) {
       setForm({
         first_name: editing.first_name || "",
         middle_name: editing.middle_name || "",
         last_name: editing.last_name || "",
-        number: editing.number || "",
+        number: String(editing.number ?? ""),
         department: editing.department || "",
         role: editing.role || "",
       });
@@ -82,40 +76,21 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
     };
   }, [open, editing]);
 
-  // Lock body scroll + close on Esc
-  useEffect(() => {
-    if (!open) return;
-
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    function onKey(e) {
-      if (e.key === "Escape") onCancel();
-    }
-    window.addEventListener("keydown", onKey);
-
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, onCancel]);
-
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
   async function handleSubmit(e) {
-  e.preventDefault();
-
-
-  setSaving(true);
+    e.preventDefault();
+    setSaving(true);
+    setError("");
 
     const payload = {
       first_name: form.first_name.trim(),
       middle_name: form.middle_name.trim(),
       last_name: form.last_name.trim(),
       name: buildFullName(form),
-      number: form.number.trim(),
+      number: String(form.number ?? "").trim(),
       department: form.department.trim(),
       role: form.role.trim(),
     };
@@ -128,10 +103,22 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
         .eq("id", editing.id));
     } else {
       ({ error } = await supabase.from("employees").insert(payload));
+
+      // Another admin took this number first. Once employees.number is unique
+      // in the database this surfaces as 23505, so fetch a fresh number and retry.
+      for (let attempt = 0; attempt < 3 && isNumberTaken(error); attempt++) {
+        payload.number = await getNextEmployeeNumber();
+        ({ error } = await supabase.from("employees").insert(payload));
+      }
     }
 
     setSaving(false);
-    if (error) return alert(error.message);
+    if (error) {
+      setError(
+        friendlyError(error, editing ? "save this employee" : "add this employee"),
+      );
+      return;
+    }
 
     setForm(empty);
     onDone();
@@ -140,20 +127,24 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
   if (!open) return null;
 
   return (
-  <div
-    className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4"
-    style={{ height: "100dvh", width: "100vw" }}
-  >
-    <div
-      className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
-      onClick={onCancel}
-    />
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
+      <div
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+        onClick={onCancel}
+      />
 
-      <div className="relative w-full sm:max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl ring-1 ring-slate-200 overflow-hidden max-h-[92vh] sm:max-h-[90vh] flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="relative w-full sm:max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl ring-1 ring-slate-200 overflow-hidden max-h-[92dvh] sm:max-h-[90vh] flex flex-col focus:outline-none"
+      >
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-base font-semibold text-slate-800">
+            <h2 id={titleId} className="text-base font-semibold text-slate-800">
               {editing ? "Edit employee" : "Add new employee"}
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -165,8 +156,9 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
           <button
             type="button"
             onClick={onCancel}
-            className="w-8 h-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+            className="w-9 h-9 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
             title="Close"
+            aria-label="Close"
           >
             <svg
               width="16"
@@ -186,6 +178,15 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+            {error && (
+              <div
+                role="alert"
+                className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 text-sm text-rose-800"
+              >
+                {error}
+              </div>
+            )}
+
             {/* Name row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Field label="First name">
@@ -239,7 +240,7 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
                   <option value="" disabled>
                     Select department
                   </option>
-                  {DEPARTMENTS.map((d) => (
+                  {departmentOptions.map((d) => (
                     <option key={d} value={d} className="text-slate-800">
                       {d}
                     </option>
@@ -268,18 +269,18 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
           </div>
 
           {/* Actions */}
-          <div className="px-4 sm:px-6 py-3 sm:py-4 bg-slate-50/60 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-slate-50/60 border-t border-slate-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 shrink-0">
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 text-sm font-medium text-slate-600 rounded-xl hover:bg-slate-100 transition"
+              className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-sm font-medium text-slate-600 rounded-xl hover:bg-slate-100 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || loadingNumber}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 active:scale-95 shadow-sm shadow-green-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 active:scale-95 shadow-sm shadow-green-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {saving ? (
                 <>
@@ -296,6 +297,13 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
         </form>
       </div>
     </div>
+  );
+}
+
+function isNumberTaken(error) {
+  return (
+    error?.code === "23505" &&
+    /number/i.test(`${error.message} ${error.details || ""}`)
   );
 }
 

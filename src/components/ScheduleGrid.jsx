@@ -1,9 +1,7 @@
-import { useState, useEffect, useRef } from "react";
-import {
-  STATUSES,
-  STATUS_MAP,
-  statusesForDepartmentResolved,
-} from "../lib/statuses";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { STATUS_MAP } from "../lib/statuses";
+import { shiftsForDepartment, useSettings } from "../lib/settings";
+import { handleMenuKeyDown } from "../lib/useDialog";
 
 // Fixed large sizes for readability
 const SIZES = {
@@ -21,6 +19,50 @@ const SIZES = {
   totalText: "text-lg",
 };
 
+// Phones: narrower name column and cells so several days fit on screen.
+const COMPACT_SIZES = {
+  empW: 136,
+  dayW: 54,
+  summaryW: 64,
+  cellH: 48,
+  cellText: "text-sm",
+  nameText: "text-sm",
+  metaText: "text-[11px]",
+  dayNum: "text-sm",
+  dayNumCircle: "w-8 h-8",
+  weekday: "text-[10px]",
+  summaryText: "text-base",
+  totalText: "text-base",
+};
+
+const COMPACT_QUERY = "(max-width: 639px)";
+
+const SHORT_MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setMatches(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [query]);
+
+  return matches;
+}
+
+// "Mon, Oct 12" — for screen-reader labels
+function spokenDate(d) {
+  const [, m, day] = d.iso.split("-").map(Number);
+  return `${d.weekday}, ${SHORT_MONTHS[m - 1]} ${day}`;
+}
+
 export default function ScheduleGrid({
   employees,
   days,
@@ -28,7 +70,15 @@ export default function ScheduleGrid({
   onSetStatus,
   readOnly = false,
 }) {
-  const z = SIZES;
+  const compact = useMediaQuery(COMPACT_QUERY);
+  const settings = useSettings();
+  const z = compact ? COMPACT_SIZES : SIZES;
+
+  // Summary columns pin to the right edge on wider screens. On phones only
+  // the name column stays pinned, otherwise there's no room left for days.
+  // `slot` counts from the right: Total = 0, Off = 1, Present = 2, IL = 3.
+  const pinRight = (slot) =>
+    compact ? undefined : { position: "sticky", right: slot * z.summaryW };
 
   const lookup = {};
   for (const s of schedules) {
@@ -63,7 +113,12 @@ export default function ScheduleGrid({
 
   return (
     <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 overflow-hidden">
-      <div className="overflow-x-auto">
+      <div
+        className="overflow-x-auto overscroll-x-contain focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-green-500"
+        role="region"
+        aria-label="Schedule grid"
+        tabIndex={0}
+      >
         <table className="border-collapse" style={{ minWidth: "100%" }}>
           <colgroup>
             <col style={{ width: z.empW }} />
@@ -78,8 +133,11 @@ export default function ScheduleGrid({
 
           <thead>
             <tr>
-              <th className="sticky left-0 z-20 bg-slate-50 border-b border-r border-slate-200 px-3 py-2 text-left">
-                <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+              <th
+                scope="col"
+                className="sticky left-0 z-20 bg-slate-50 border-b border-r border-slate-200 px-2 sm:px-3 py-2 text-left"
+              >
+                <span className="text-[10px] sm:text-xs uppercase tracking-wider text-slate-500 font-semibold">
                   Employee
                 </span>
               </th>
@@ -90,8 +148,10 @@ export default function ScheduleGrid({
                 return (
                   <th
                     key={d.iso}
+                    scope="col"
+                    aria-label={spokenDate(d)}
                     className={`border-b border-r border-slate-200 px-0.5 py-1.5 text-center ${
-                      isWeekend ? "bg-slate-100/70" : "bg-slate-50"
+                      isWeekend ? "bg-slate-100" : "bg-slate-50"
                     }`}
                   >
                     <div
@@ -113,28 +173,44 @@ export default function ScheduleGrid({
                   </th>
                 );
               })}
-              <th className="sticky z-20 bg-emerald-50 border-b border-r border-slate-200 px-1 py-2 text-center">
+              <th
+                scope="col"
+                style={pinRight(3)}
+                className="z-20 bg-emerald-50 border-b border-r border-slate-200 px-1 py-2 text-center"
+              >
                 <div className="text-[10px] uppercase tracking-wider text-emerald-800 font-bold leading-tight">
                   Incentive
                   <br />
                   Leave
                 </div>
               </th>
-              <th className="sticky z-20 bg-emerald-50 border-b border-r border-slate-200 px-1 py-2 text-center">
+              <th
+                scope="col"
+                style={pinRight(2)}
+                className="z-20 bg-emerald-50 border-b border-r border-slate-200 px-1 py-2 text-center"
+              >
                 <div className="text-[10px] uppercase tracking-wider text-emerald-700 font-bold leading-tight">
                   Physical
                   <br />
                   Present
                 </div>
               </th>
-              <th className="sticky z-20 bg-rose-50 border-b border-r border-slate-200 px-1 py-2 text-center">
+              <th
+                scope="col"
+                style={pinRight(1)}
+                className="z-20 bg-rose-50 border-b border-r border-slate-200 px-1 py-2 text-center"
+              >
                 <div className="text-[10px] uppercase tracking-wider text-rose-700 font-bold leading-tight">
                   Physical
                   <br />
                   Off
                 </div>
               </th>
-              <th className="sticky right-0 z-20 bg-slate-100 border-b border-slate-200 px-1 py-2 text-center">
+              <th
+                scope="col"
+                style={pinRight(0)}
+                className="z-20 bg-slate-100 border-b border-slate-200 px-1 py-2 text-center"
+              >
                 <div className="text-[10px] uppercase tracking-wider text-slate-700 font-bold leading-tight">
                   Total
                   <br />
@@ -157,8 +233,10 @@ export default function ScheduleGrid({
               }
               const total = present;
 
-              const rowBg = idx % 2 ? "bg-slate-50/40" : "bg-white";
-              const hoverBg = readOnly ? "" : "group-hover:bg-green-50/40";
+              // Opaque backgrounds: pinned cells must hide what scrolls beneath.
+              const rowBg = idx % 2 ? "bg-slate-50" : "bg-white";
+              const hoverBg = readOnly ? "" : "group-hover:bg-green-50";
+              const statuses = shiftsForDepartment(settings, emp.department);
 
               return (
                 <tr
@@ -167,18 +245,27 @@ export default function ScheduleGrid({
                     readOnly ? "" : "hover:bg-green-50/40"
                   } transition-colors`}
                 >
-                  <td
-                    className={`sticky left-0 z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-3 py-2 transition-colors`}
+                  <th
+                    scope="row"
+                    title={emp.name}
+                    className={`sticky left-0 z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-2 sm:px-3 py-2 text-left font-normal transition-colors`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       {/* Row number (display only — not the employee number) */}
-                      <div className="w-9 h-9 shrink-0 grid place-items-center rounded-lg bg-green-50 text-green-700 text-sm font-bold tabular-nums ring-1 ring-green-100">
-                        {idx + 1}
-                      </div>
+                      {!compact && (
+                        <div
+                          className="w-9 h-9 shrink-0 grid place-items-center rounded-lg bg-green-50 text-green-700 text-sm font-bold tabular-nums ring-1 ring-green-100"
+                          aria-hidden="true"
+                        >
+                          {idx + 1}
+                        </div>
+                      )}
 
                       <div className="min-w-0">
                         <div
-                          className={`font-semibold ${z.nameText} text-slate-800 truncate leading-tight`}
+                          className={`font-semibold ${z.nameText} text-slate-800 leading-tight ${
+                            compact ? "line-clamp-2 break-words" : "truncate"
+                          }`}
                         >
                           {emp.name}
                         </div>
@@ -189,7 +276,7 @@ export default function ScheduleGrid({
                         </div>
                       </div>
                     </div>
-                  </td>
+                  </th>
 
                   {days.map((d) => {
                     const key = `${emp.id}|${d.iso}`;
@@ -208,9 +295,9 @@ export default function ScheduleGrid({
                           height={z.cellH}
                           textClass={z.cellText}
                           readOnly={readOnly}
-                          statuses={statusesForDepartmentResolved(
-                            emp.department,
-                          )}
+                          statuses={statuses}
+                          label={`${emp.name}, ${spokenDate(d)}`}
+                          compact={compact}
                           onChange={(newStatus) =>
                             onSetStatus(emp.id, d.iso, newStatus)
                           }
@@ -219,7 +306,8 @@ export default function ScheduleGrid({
                     );
                   })}
                   <td
-                    className={`sticky z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-1 py-2 text-center transition-colors`}
+                    style={pinRight(3)}
+                    className={`z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-1 py-2 text-center transition-colors`}
                   >
                     <SummaryNumber
                       value={il}
@@ -227,7 +315,8 @@ export default function ScheduleGrid({
                     />
                   </td>
                   <td
-                    className={`sticky z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-1 py-2 text-center transition-colors`}
+                    style={pinRight(2)}
+                    className={`z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-1 py-2 text-center transition-colors`}
                   >
                     <SummaryNumber
                       value={present}
@@ -235,7 +324,8 @@ export default function ScheduleGrid({
                     />
                   </td>
                   <td
-                    className={`sticky z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-1 py-2 text-center transition-colors`}
+                    style={pinRight(1)}
+                    className={`z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-1 py-2 text-center transition-colors`}
                   >
                     <SummaryNumber
                       value={off}
@@ -243,7 +333,8 @@ export default function ScheduleGrid({
                     />
                   </td>
                   <td
-                    className={`sticky right-0 z-10 bg-slate-50 border-b border-slate-200 px-1 py-2 text-center`}
+                    style={pinRight(0)}
+                    className="z-10 bg-slate-50 border-b border-slate-200 px-1 py-2 text-center"
                   >
                     <SummaryNumber
                       value={total}
@@ -258,9 +349,15 @@ export default function ScheduleGrid({
           {/* ---------- TOTAL MANPOWER FOOTER ---------- */}
           <tfoot>
             <tr>
-              <td className="sticky left-0 z-20 bg-gradient-to-r from-green-100 via-green-50 to-transparent border-t-2 border-green-200 border-r border-slate-200 px-3 py-2.5">
+              <th
+                scope="row"
+                className="sticky left-0 z-20 bg-green-50 border-t-2 border-green-200 border-r border-slate-200 px-2 sm:px-3 py-2.5 text-left font-normal"
+              >
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md bg-green-600 text-white grid place-items-center shadow-sm">
+                  <div
+                    className="hidden sm:grid w-6 h-6 rounded-md bg-green-600 text-white place-items-center shadow-sm shrink-0"
+                    aria-hidden="true"
+                  >
                     <svg
                       width="12"
                       height="12"
@@ -286,7 +383,7 @@ export default function ScheduleGrid({
                     </div>
                   </div>
                 </div>
-              </td>
+              </th>
 
               {days.map((d) => {
                 const count = dailyManpower[d.iso] || 0;
@@ -308,22 +405,34 @@ export default function ScheduleGrid({
                   </td>
                 );
               })}
-              <td className="sticky z-20 bg-emerald-50 border-t-2 border-green-200 border-r border-slate-200 py-2 text-center">
+              <td
+                style={pinRight(3)}
+                className="z-20 bg-emerald-50 border-t-2 border-green-200 border-r border-slate-200 py-2 text-center"
+              >
                 <span className={`font-bold text-emerald-800 ${z.totalText}`}>
                   {grandIL}
                 </span>
               </td>
-              <td className="sticky z-20 bg-emerald-50 border-t-2 border-green-200 border-r border-slate-200 py-2 text-center">
+              <td
+                style={pinRight(2)}
+                className="z-20 bg-emerald-50 border-t-2 border-green-200 border-r border-slate-200 py-2 text-center"
+              >
                 <span className={`font-bold text-emerald-700 ${z.totalText}`}>
                   {grandPresent}
                 </span>
               </td>
-              <td className="sticky z-20 bg-rose-50 border-t-2 border-green-200 border-r border-slate-200 py-2 text-center">
+              <td
+                style={pinRight(1)}
+                className="z-20 bg-rose-50 border-t-2 border-green-200 border-r border-slate-200 py-2 text-center"
+              >
                 <span className={`font-bold text-rose-700 ${z.totalText}`}>
                   {grandOff}
                 </span>
               </td>
-              <td className="sticky right-0 z-20 bg-slate-100 border-t-2 border-green-200 py-2 text-center">
+              <td
+                style={pinRight(0)}
+                className="z-20 bg-slate-100 border-t-2 border-green-200 py-2 text-center"
+              >
                 <span className={`font-bold text-slate-700 ${z.totalText}`}>
                   {grandTotal}
                 </span>
@@ -343,7 +452,7 @@ function SummaryNumber({ value, className }) {
   );
 }
 
-/* ---- Cell button (flicker-free popup) ---- */
+/* ---- Cell button ---- */
 function CellButton({
   status,
   isToday,
@@ -351,75 +460,17 @@ function CellButton({
   textClass,
   readOnly,
   statuses,
+  label,
+  compact,
   onChange,
 }) {
-  const [pos, setPos] = useState(null);
+  const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const current = status ? STATUS_MAP[status] : null;
 
-  // Keep the popup glued to its cell while scrolling / resizing
-  useEffect(() => {
-    if (!pos) return;
-
-    function reposition() {
-      if (!btnRef.current) return;
-      const r = btnRef.current.getBoundingClientRect();
-      const POPUP_W = 208;
-      const POPUP_H = 280;
-
-      let left = r.left;
-      let top = r.bottom + 6;
-
-      // Clamp horizontally
-      if (left + POPUP_W > window.innerWidth - 8) {
-        left = window.innerWidth - POPUP_W - 8;
-      }
-      if (left < 8) left = 8;
-
-      // If it would overflow the bottom, show above the cell
-      if (top + POPUP_H > window.innerHeight - 8) {
-        top = r.top - POPUP_H - 6;
-        if (top < 8) top = 8;
-      }
-
-      setPos({ top, left });
-    }
-
-    // Scroll (capture phase catches inner scroll containers too)
-    window.addEventListener("scroll", reposition, true);
-    window.addEventListener("resize", reposition);
-
-    return () => {
-      window.removeEventListener("scroll", reposition, true);
-      window.removeEventListener("resize", reposition);
-    };
-  }, [pos]);
-
-  function handleClick() {
-    if (readOnly) return;
-    if (pos) {
-      setPos(null);
-      return;
-    }
-
-    const r = btnRef.current.getBoundingClientRect();
-    const POPUP_W = 208;
-    const POPUP_H = 280;
-
-    let left = r.left;
-    let top = r.bottom + 6;
-
-    if (left + POPUP_W > window.innerWidth - 8) {
-      left = window.innerWidth - POPUP_W - 8;
-    }
-    if (left < 8) left = 8;
-
-    if (top + POPUP_H > window.innerHeight - 8) {
-      top = r.top - POPUP_H - 6;
-      if (top < 8) top = 8;
-    }
-
-    setPos({ top, left });
+  function close(refocus) {
+    setOpen(false);
+    if (refocus) btnRef.current?.focus();
   }
 
   const look = current
@@ -432,9 +483,15 @@ function CellButton({
     <>
       <button
         ref={btnRef}
-        onClick={handleClick}
+        type="button"
+        onClick={() => {
+          if (!readOnly) setOpen((o) => !o);
+        }}
         disabled={readOnly}
         style={{ height }}
+        aria-label={`${label}: ${current?.label || "No shift"}`}
+        aria-haspopup={readOnly ? undefined : "menu"}
+        aria-expanded={readOnly ? undefined : open}
         className={`w-full ${textClass} font-bold tracking-wide transition-all duration-150 ${
           readOnly ? "cursor-default select-none" : "active:scale-95"
         } ${look} ${isToday ? "ring-2 ring-inset ring-green-300" : ""}`}
@@ -447,14 +504,17 @@ function CellButton({
         {status || "—"}
       </button>
 
-      {!readOnly && pos && (
+      {!readOnly && open && (
         <Popup
-          pos={pos}
+          anchorRef={btnRef}
+          label={label}
+          current={status}
           statuses={statuses}
-          onClose={() => setPos(null)}
+          compact={compact}
+          onClose={close}
           onPick={(code) => {
             onChange(code);
-            setPos(null);
+            close(true);
           }}
         />
       )}
@@ -462,24 +522,97 @@ function CellButton({
   );
 }
 
-/* ---- Popup ---- */
-function Popup({ pos, statuses, onClose, onPick }) {
+/* ---- Popup ----
+   Desktop: floats next to the cell, measured after render and clamped to the
+   viewport (scrolls internally if taller than the screen).
+   Phones: a bottom sheet, so it can never hang off the side. */
+function Popup({ anchorRef, label, current, statuses, compact, onClose, onPick }) {
+  const ref = useRef(null);
+  const [style, setStyle] = useState({ visibility: "hidden" });
+
+  useLayoutEffect(() => {
+    if (compact) return;
+
+    function place() {
+      const el = ref.current;
+      const anchor = anchorRef.current;
+      if (!el || !anchor) return;
+
+      const M = 8;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const r = anchor.getBoundingClientRect();
+      const w = el.offsetWidth;
+      const h = Math.min(el.scrollHeight, vh - M * 2);
+
+      const left = Math.max(M, Math.min(r.left, vw - w - M));
+      let top = r.bottom + 6;
+      if (top + h > vh - M) {
+        const above = r.top - h - 6;
+        top = above >= M ? above : Math.max(M, vh - h - M);
+      }
+
+      setStyle({ top, left, maxHeight: vh - M * 2 });
+    }
+
+    place();
+    // Capture phase catches inner scroll containers (the grid) too.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [anchorRef, compact]);
+
+  // Move focus into the menu: the current shift, else the first option.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    (
+      el.querySelector('[aria-checked="true"]') ||
+      el.querySelector('[role^="menuitem"]')
+    )?.focus();
+  }, []);
+
   return (
     <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
-        className="fixed z-50 bg-white border border-slate-200 rounded-2xl shadow-2xl p-2 w-72"
-        style={{ top: pos.top, left: pos.left }}
+        className={`fixed inset-0 z-40 ${compact ? "bg-slate-900/30" : ""}`}
+        onClick={() => onClose(false)}
+      />
+      <div
+        ref={ref}
+        role="menu"
+        aria-label={`Set shift for ${label}`}
+        onKeyDown={(e) => handleMenuKeyDown(e, ref.current, onClose)}
+        className={
+          compact
+            ? "fixed z-50 inset-x-0 bottom-0 max-h-[75dvh] overflow-y-auto bg-white rounded-t-2xl shadow-2xl ring-1 ring-slate-200 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+            : "fixed z-50 w-72 max-w-[calc(100vw-16px)] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl p-2"
+        }
+        style={compact ? undefined : style}
       >
-        <div className="px-3 py-1.5 text-xs uppercase tracking-wider text-slate-400 font-semibold">
-          Set shift
+        {compact && (
+          <div className="mx-auto mb-1 h-1 w-10 rounded-full bg-slate-200" aria-hidden="true" />
+        )}
+        <div className="px-3 py-1.5" aria-hidden="true">
+          <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
+            Set shift
+          </div>
+          <div className="text-xs text-slate-500 truncate">{label}</div>
         </div>
 
         {statuses.map((s) => (
           <button
             key={s.code}
+            type="button"
+            role="menuitemradio"
+            aria-checked={current === s.code}
             onClick={() => onPick(s.code)}
-            className="w-full flex items-start gap-3 px-3 py-2.5 text-sm rounded-xl hover:bg-slate-100 transition text-left"
+            className={`w-full flex items-start gap-3 px-3 py-2.5 text-sm rounded-xl hover:bg-slate-100 focus:bg-slate-100 focus:outline-none transition text-left ${
+              current === s.code ? "ring-1 ring-inset ring-green-300 bg-green-50/60" : ""
+            }`}
           >
             <span
               className={`min-w-[52px] h-9 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 ${s.classes}`}
@@ -502,8 +635,10 @@ function Popup({ pos, statuses, onClose, onPick }) {
         <div className="my-1.5 border-t border-slate-100" />
 
         <button
+          type="button"
+          role="menuitem"
           onClick={() => onPick(null)}
-          className="w-full text-left px-3 py-2.5 text-sm rounded-xl hover:bg-rose-50 text-rose-600 font-medium transition"
+          className="w-full text-left px-3 py-2.5 text-sm rounded-xl hover:bg-rose-50 focus:bg-rose-50 focus:outline-none text-rose-600 font-medium transition"
         >
           Clear
         </button>

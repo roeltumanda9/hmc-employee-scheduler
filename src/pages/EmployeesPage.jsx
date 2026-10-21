@@ -1,33 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { DEPARTMENTS } from "../lib/departments";
+import { departmentNames, useSettings } from "../lib/settings";
 import EmployeeForm from "../components/EmployeeForm";
 import ConfirmModal from "../components/ConfirmModal";
+import ErrorBanner from "../components/ErrorBanner";
+import { canManageEmployees } from "../lib/auth";
+import { friendlyError } from "../lib/errors";
+import { buildFullName } from "../lib/format";
+import { handleMenuKeyDown } from "../lib/useDialog";
 
 const DEPT_BADGE = "bg-slate-100 text-slate-700 ring-slate-200";
-
-function middleInitial(middle_name) {
-  const m = (middle_name || "").trim();
-  return m ? m[0].toUpperCase() + "." : "";
-}
 
 // "DELA CRUZ, JUAN S."
 function displayName(e) {
   const f = (e.first_name || "").trim();
   const l = (e.last_name || "").trim();
-  const mi = middleInitial(e.middle_name);
-
-  if (f || l) {
-    const firstMiddle = [f, mi].filter(Boolean).join(" ");
-    if (l && firstMiddle) return `${l}, ${firstMiddle}`.toUpperCase();
-    if (l) return l.toUpperCase();
-    return firstMiddle.toUpperCase();
-  }
+  if (f || l) return buildFullName(e);
   return (e.name || "").toUpperCase();
 }
 
 export default function EmployeesPage({ role }) {
-  const canManage = role === "super_admin";
+  const canManage = canManageEmployees(role);
+  const settings = useSettings();
 
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,14 +30,16 @@ export default function EmployeesPage({ role }) {
   const [confirmId, setConfirmId] = useState(null);
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("all");
+  const [error, setError] = useState("");
 
   async function loadEmployees() {
     setLoading(true);
     const { data, error } = await supabase.from("employees").select("*");
 
     if (error) {
-      alert(error.message);
+      setError(friendlyError(error, "load employees"));
     } else {
+      setError("");
       const sorted = [...data].sort((a, b) => {
         const na = parseInt(a.number, 10);
         const nb = parseInt(b.number, 10);
@@ -68,7 +64,7 @@ export default function EmployeesPage({ role }) {
 
     setConfirmId(null);
 
-    if (error) alert(error.message);
+    if (error) setError(friendlyError(error, "delete this employee"));
     else loadEmployees();
   }
 
@@ -113,7 +109,7 @@ export default function EmployeesPage({ role }) {
     // Sort by department (A–Z), then by name (A–Z)
     return [...result].sort((a, b) => {
       if (a.department !== b.department) {
-        return a.department.localeCompare(b.department);
+        return (a.department || "").localeCompare(b.department || "");
       }
       return (a.name || "").localeCompare(b.name || "");
     });
@@ -121,13 +117,15 @@ export default function EmployeesPage({ role }) {
 
   const counts = useMemo(() => {
     const c = { all: employees.length };
-    for (const d of DEPARTMENTS) c[d] = 0;
+    for (const d of departmentNames(settings)) c[d] = 0;
     for (const e of employees) c[e.department] = (c[e.department] || 0) + 1;
     return c;
-  }, [employees]);
+  }, [employees, settings]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <ErrorBanner message={error} onDismiss={() => setError("")} />
+
       {canManage && (
   <EmployeeForm
     open={formOpen}
@@ -174,6 +172,8 @@ export default function EmployeesPage({ role }) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search…"
+                aria-label="Search employees by name, number or role"
+                type="search"
                 className="w-full sm:w-56 rounded-xl border border-slate-200 bg-slate-50/60 pl-9 pr-3 py-2.5 sm:py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition"
               />
             </div>
@@ -220,7 +220,7 @@ export default function EmployeesPage({ role }) {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 text-slate-500 text-left text-xs uppercase tracking-wider">
-                <th className="px-6 py-3 font-semibold w-24">Number</th>
+                <th className="px-6 py-3 font-semibold w-24">Emp. No.</th>
                 <th className="px-6 py-3 font-semibold">Employee</th>
                 <th className="px-6 py-3 font-semibold">Department</th>
                 <th className="px-6 py-3 font-semibold">Role</th>
@@ -256,15 +256,15 @@ export default function EmployeesPage({ role }) {
               )}
 
               {!loading &&
-                filtered.map((e, index) => {
+                filtered.map((e) => {
                   const full = displayName(e);
                   return (
                     <tr
                       key={e.id}
                       className="hover:bg-green-50/40 transition-colors"
                     >
-                      <td className="px-6 py-3 text-slate-600 font-mono text-xs">
-                        {index + 1}
+                      <td className="px-6 py-3 text-slate-600 font-mono text-xs tabular-nums">
+                        {e.number || "—"}
                       </td>
                       <td className="px-6 py-3">
                         <div className="font-medium text-slate-800 truncate uppercase">
@@ -275,7 +275,7 @@ export default function EmployeesPage({ role }) {
                         <span
                           className={`inline-flex items-center text-xs font-medium rounded-full px-2.5 py-1 ring-1 ${DEPT_BADGE}`}
                         >
-                          {e.department}
+                          {e.department || "No department"}
                         </span>
                       </td>
                       <td className="px-6 py-3 text-slate-600 uppercase">
@@ -284,7 +284,7 @@ export default function EmployeesPage({ role }) {
                       {canManage && (
                         <td className="px-6 py-3">
                           <RowActions
-                            employee={e}
+                            name={full}
                             onEdit={() => openEdit(e)}
                             onAskDelete={() => setConfirmId(e.id)}
                           />
@@ -313,7 +313,7 @@ export default function EmployeesPage({ role }) {
           )}
 
           {!loading &&
-            filtered.map((e, index) => {
+            filtered.map((e) => {
               const full = displayName(e);
               return (
                 <div key={e.id} className="p-4 space-y-3">
@@ -323,13 +323,13 @@ export default function EmployeesPage({ role }) {
                         {full || "—"}
                       </div>
                       <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                        #{index + 1}
+                        {e.number ? `Emp. No. ${e.number}` : "No employee number"}
                       </div>
                     </div>
                     <span
                       className={`inline-flex shrink-0 items-center text-[10px] font-medium rounded-full px-2 py-1 ring-1 ${DEPT_BADGE}`}
                     >
-                      {e.department}
+                      {e.department || "No department"}
                     </span>
                   </div>
 
@@ -341,13 +341,15 @@ export default function EmployeesPage({ role }) {
                     <div className="flex gap-2 pt-1">
                       <button
                         onClick={() => openEdit(e)}
-                        className="flex-1 text-xs font-semibold text-green-700 py-2 rounded-lg bg-green-50 hover:bg-green-100 transition"
+                        aria-label={`Edit ${full}`}
+                        className="flex-1 text-xs font-semibold text-green-700 py-2.5 rounded-lg bg-green-50 hover:bg-green-100 transition"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => setConfirmId(e.id)}
-                        className="flex-1 text-xs font-semibold text-rose-600 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 transition"
+                        aria-label={`Delete ${full}`}
+                        className="flex-1 text-xs font-semibold text-rose-600 py-2.5 rounded-lg bg-rose-50 hover:bg-rose-100 transition"
                       >
                         Delete
                       </button>
@@ -386,8 +388,11 @@ export default function EmployeesPage({ role }) {
 
 /* ------------------ Department filter dropdown ------------------ */
 function DepartmentFilterDropdown({ value, onChange, counts }) {
+  const settings = useSettings();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -396,16 +401,17 @@ function DepartmentFilterDropdown({ value, onChange, counts }) {
         setOpen(false);
       }
     }
-    function onKey(e) {
-      if (e.key === "Escape") setOpen(false);
-    }
     window.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
+    menuRef.current?.querySelector('[aria-selected="true"]')?.focus();
     return () => {
       window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  function close(refocus) {
+    setOpen(false);
+    if (refocus) btnRef.current?.focus();
+  }
 
   const isAll = value === "all";
   const label = isAll ? "All departments" : value;
@@ -413,17 +419,27 @@ function DepartmentFilterDropdown({ value, onChange, counts }) {
 
   const options = [
     { value: "all", label: "All departments" },
-    ...[...DEPARTMENTS]
+    ...departmentNames(settings)
       .sort((a, b) => a.localeCompare(b))
       .map((d) => ({ value: d, label: d })),
   ];
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div ref={wrapRef} className="relative min-w-0">
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition min-w-[220px] justify-between ${
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" && !open) {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Filter by department: ${label}`}
+        className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition w-full sm:w-auto sm:min-w-[220px] justify-between ${
           open
             ? "border-green-500 ring-2 ring-green-100 bg-white"
             : "border-slate-200 bg-slate-50/60 hover:bg-white"
@@ -475,8 +491,17 @@ function DepartmentFilterDropdown({ value, onChange, counts }) {
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl ring-1 ring-slate-200 p-1.5">
-          <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+        <div
+          ref={menuRef}
+          role="listbox"
+          aria-label="Filter by department"
+          onKeyDown={(e) => handleMenuKeyDown(e, menuRef.current, close)}
+          className="absolute z-50 top-full left-0 mt-2 w-72 max-w-[calc(100vw-2rem)] max-h-[60vh] overflow-y-auto bg-white rounded-2xl shadow-xl ring-1 ring-slate-200 p-1.5"
+        >
+          <div
+            className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-slate-400 font-semibold"
+            aria-hidden="true"
+          >
             Filter by department
           </div>
 
@@ -486,9 +511,12 @@ function DepartmentFilterDropdown({ value, onChange, counts }) {
             return (
               <button
                 key={opt.value}
+                type="button"
+                role="option"
+                aria-selected={active}
                 onClick={() => {
                   onChange(opt.value);
-                  setOpen(false);
+                  close(true);
                 }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-left transition ${
                   active
@@ -531,17 +559,19 @@ function DepartmentFilterDropdown({ value, onChange, counts }) {
 }
 
 /* ------------------ Row actions ------------------ */
-function RowActions({ employee, onEdit, onAskDelete }) {
+function RowActions({ name, onEdit, onAskDelete }) {
   return (
     <div className="flex justify-end gap-1">
       <button
         onClick={onEdit}
+        aria-label={`Edit ${name}`}
         className="text-xs font-medium text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-50 transition"
       >
         Edit
       </button>
       <button
         onClick={onAskDelete}
+        aria-label={`Delete ${name}`}
         className="text-xs font-medium text-rose-600 px-3 py-1.5 rounded-lg hover:bg-rose-50 transition"
       >
         Delete

@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
-import { getMyProfile, ROLE_LABELS } from "./lib/auth";
+import { canManageEmployees, getMyProfile, ROLE_LABELS } from "./lib/auth";
+import { DEFAULT_SETTINGS, SettingsContext, loadSettings } from "./lib/settings";
 import LoginPage from "./pages/LoginPage";
 import EmployeesPage from "./pages/EmployeesPage";
 import SchedulerPage from "./pages/SchedulerPage";
+import SettingsPage from "./pages/SettingsPage";
 import { useAutoLogout } from "./lib/useAutoLogout";
 import IdleWarningModal from "./components/IdleWarningModal";
 import ConfirmModal from "./components/ConfirmModal";
@@ -16,14 +18,32 @@ export default function App() {
   const [profileError, setProfileError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  // True while the scheduler holds unsaved edits; guards page switches.
+  const [schedulerDirty, setSchedulerDirty] = useState(false);
+  const [pendingPage, setPendingPage] = useState(null);
 
   const [page, setPage] = useState(() => {
     const saved = localStorage.getItem("hmc_page");
-    return saved === "scheduler" || saved === "employees" ? saved : "employees";
+    return ["employees", "scheduler", "settings"].includes(saved)
+      ? saved
+      : "employees";
   });
 
+  // Department & print settings from the database (built-in defaults until loaded)
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+
+  const reloadSettings = useCallback(async () => {
+    const next = await loadSettings();
+    if (next.loadError) console.error("Settings:", next.loadError);
+    setSettings(next);
+  }, []);
+
   // Auto-logout after inactivity (only when signed in)
-  const { warning: idleWarning, staySignedIn } = useAutoLogout(!!session);
+  const {
+    warning: idleWarning,
+    deadline: idleDeadline,
+    staySignedIn,
+  } = useAutoLogout(!!session);
 
   // --- Auth bootstrap ---
   useEffect(() => {
@@ -38,6 +58,8 @@ export default function App() {
 
       if (!nextSession || event === "SIGNED_OUT") {
         setProfile(null);
+        // Drop loaded settings so staff names don't linger in memory.
+        setSettings(DEFAULT_SETTINGS);
         setProfileLoading(false);
         setProfileError("");
         setConfirmSignOut(false);
@@ -140,6 +162,13 @@ export default function App() {
     };
   }, [sessionUserId]);
 
+  // Load settings once the profile (and so the role used by RLS) is known.
+  // They're reset on sign-out in the auth handler above.
+  const profileId = profile?.id;
+  useEffect(() => {
+    if (profileId) reloadSettings();
+  }, [profileId, reloadSettings]);
+
   useEffect(() => {
     setSidebarOpen(false);
   }, [page]);
@@ -152,11 +181,24 @@ export default function App() {
     if (sidebarOpen) {
       const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
+      function onKey(e) {
+        if (e.key === "Escape") setSidebarOpen(false);
+      }
+      window.addEventListener("keydown", onKey);
       return () => {
         document.body.style.overflow = prev;
+        window.removeEventListener("keydown", onKey);
       };
     }
   }, [sidebarOpen]);
+
+  function goToPage(id) {
+    if (id !== page && page === "scheduler" && schedulerDirty) {
+      setPendingPage(id);
+    } else {
+      setPage(id);
+    }
+  }
 
   // --- Loading ---
   if (authLoading) {
@@ -170,7 +212,6 @@ export default function App() {
   // --- Not signed in ---
   if (!session) return <LoginPage />;
 
-  // --- Profile still loading ---
   // --- Profile loading ---
   if (profileLoading) {
     return (
@@ -215,14 +256,26 @@ export default function App() {
   }
 
   const role = profile.role;
-  const effectivePage = page;
+  const canManageSettings = canManageEmployees(role);
+  const effectivePage =
+    page === "settings" && !canManageSettings ? "employees" : page;
 
   const navItems = [
     { id: "employees", label: "Employees", icon: "👥" },
     { id: "scheduler", label: "Scheduler", icon: "📅" },
+    ...(canManageSettings
+      ? [{ id: "settings", label: "Settings", icon: "⚙️" }]
+      : []),
   ];
 
+  const pageTitle = {
+    employees: "Employees",
+    scheduler: "Scheduler",
+    settings: "Settings",
+  }[effectivePage];
+
   return (
+    <SettingsContext.Provider value={settings}>
     <div className="min-h-screen flex bg-slate-50">
       {sidebarOpen && (
         <div
@@ -258,6 +311,7 @@ export default function App() {
             onClick={() => setSidebarOpen(false)}
             className="md:hidden w-8 h-8 grid place-items-center rounded-lg text-green-800 hover:bg-green-100 transition shrink-0"
             title="Close menu"
+            aria-label="Close menu"
           >
             <svg
               width="16"
@@ -281,14 +335,15 @@ export default function App() {
             return (
               <button
                 key={item.id}
-                onClick={() => setPage(item.id)}
+                onClick={() => goToPage(item.id)}
+                aria-current={active ? "page" : undefined}
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition ${
                   active
                     ? "bg-green-600 text-white shadow-sm shadow-green-200"
                     : "text-green-900/80 hover:bg-green-100/70 hover:text-green-900"
                 }`}
               >
-                <span className="text-base">{item.icon}</span>
+                <span className="text-base" aria-hidden="true">{item.icon}</span>
                 {item.label}
               </button>
             );
@@ -337,6 +392,8 @@ export default function App() {
             onClick={() => setSidebarOpen(true)}
             className="md:hidden w-9 h-9 grid place-items-center rounded-xl text-slate-600 hover:bg-slate-100 transition shrink-0"
             title="Open menu"
+            aria-label="Open menu"
+            aria-expanded={sidebarOpen}
           >
             <svg
               width="18"
@@ -374,6 +431,27 @@ export default function App() {
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                   <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
+              ) : effectivePage === "settings" ? (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="4" y1="21" x2="4" y2="14" />
+                  <line x1="4" y1="10" x2="4" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12" y2="3" />
+                  <line x1="20" y1="21" x2="20" y2="16" />
+                  <line x1="20" y1="12" x2="20" y2="3" />
+                  <line x1="1" y1="14" x2="7" y2="14" />
+                  <line x1="9" y1="8" x2="15" y2="8" />
+                  <line x1="17" y1="16" x2="23" y2="16" />
+                </svg>
               ) : (
                 <svg
                   width="20"
@@ -399,7 +477,7 @@ export default function App() {
                 Hofileña Medical Centrum
               </p>
               <h2 className="text-lg md:text-xl font-bold text-slate-800 leading-tight truncate">
-                {effectivePage === "employees" ? "Employees" : "Scheduler"}
+                {pageTitle}
               </h2>
             </div>
           </div>
@@ -408,20 +486,46 @@ export default function App() {
         <div className="p-4 md:p-6 flex-1">
           {effectivePage === "employees" ? (
             <EmployeesPage role={role} />
+          ) : effectivePage === "settings" ? (
+            <SettingsPage role={role} onSaved={reloadSettings} />
           ) : (
-            <SchedulerPage role={role} />
+            <SchedulerPage role={role} onDirtyChange={setSchedulerDirty} />
           )}
         </div>
       </main>
 
       {/* Idle auto-logout warning */}
-      <IdleWarningModal open={idleWarning} onStaySignedIn={staySignedIn} />
+      <IdleWarningModal
+        open={idleWarning}
+        deadline={idleDeadline}
+        onStaySignedIn={staySignedIn}
+      />
+
+      {/* Leaving the scheduler with unsaved edits */}
+      <ConfirmModal
+        open={pendingPage !== null}
+        title="Discard unsaved changes?"
+        message="You have unsaved schedule changes. Leaving the Scheduler will discard them."
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
+        variant="warning"
+        onConfirm={() => {
+          const next = pendingPage;
+          setPendingPage(null);
+          setPage(next);
+        }}
+        onCancel={() => setPendingPage(null)}
+      />
 
       {/* Sign out confirmation */}
       <ConfirmModal
         open={confirmSignOut}
         title="Sign out?"
-        message="You'll need to log in again to access the app."
+        message={
+          schedulerDirty
+            ? "You have unsaved schedule changes that will be lost. You'll need to log in again to access the app."
+            : "You'll need to log in again to access the app."
+        }
         confirmLabel="Yes, sign out"
         cancelLabel="Stay"
         variant="warning"
@@ -441,28 +545,27 @@ export default function App() {
             <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
         }
-       
-onConfirm={async () => {
-  setConfirmSignOut(false);
+        onConfirm={async () => {
+          setConfirmSignOut(false);
 
-  // Clear protected information immediately.
-  setSession(null);
-  setProfile(null);
-  setProfileError("");
-  setProfileLoading(false);
-  sessionStorage.removeItem("hmc_last_activity");
+          // Clear protected information immediately.
+          setSession(null);
+          setProfile(null);
+          setProfileError("");
+          setProfileLoading(false);
+          sessionStorage.removeItem("hmc_last_activity");
 
-  const { error } = await supabase.auth.signOut({
-    scope: "local",
-  });
+          const { error } = await supabase.auth.signOut({
+            scope: "local",
+          });
 
-  if (error) {
-    console.error("Sign out failed:", error);
-  }
-}}
-
+          if (error) {
+            console.error("Sign out failed:", error);
+          }
+        }}
         onCancel={() => setConfirmSignOut(false)}
       />
     </div>
+    </SettingsContext.Provider>
   );
 }

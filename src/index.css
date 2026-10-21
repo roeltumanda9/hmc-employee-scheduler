@@ -11,6 +11,22 @@
 
 html {
   font-size: 18px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Phones: the 18px base makes every control oversized on a ~390px screen. */
+@media (max-width: 639px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+/* Visible keyboard focus. Elements with their own focus ring
+   (focus:outline-none + focus:ring) keep it, since that rule is more specific. */
+:focus-visible {
+  outline: 2px solid var(--brand-green);
+  outline-offset: 2px;
 }
 
 button,

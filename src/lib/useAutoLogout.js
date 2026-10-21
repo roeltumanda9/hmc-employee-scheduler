@@ -13,6 +13,8 @@ const STORAGE_KEY = "hmc_last_activity";
 
 export function useAutoLogout(enabled) {
   const [warning, setWarning] = useState(false);
+  // Timestamp (ms) at which the idle sign-out will happen, for the countdown.
+  const [deadline, setDeadline] = useState(null);
   const warningRef = useRef(false);
 
   useEffect(() => {
@@ -28,6 +30,12 @@ export function useAutoLogout(enabled) {
     function showWarning() {
       if (disposed) return;
 
+      const last = Number(sessionStorage.getItem(STORAGE_KEY));
+      setDeadline(
+        Number.isFinite(last) && last > 0
+          ? last + IDLE_TIMEOUT
+          : Date.now() + WARN_BEFORE,
+      );
       warningRef.current = true;
       setWarning(true);
     }
@@ -45,12 +53,10 @@ export function useAutoLogout(enabled) {
       sessionStorage.removeItem(STORAGE_KEY);
 
       try {
-        
-const { error } = await supabase.auth.signOut({
-  scope: "local",
-});
-
-
+        // "local" ends this tab's session: Supabase revokes its refresh
+        // token server-side, but an already-issued access token stays valid
+        // until it expires (the project's JWT expiry setting).
+        const { error } = await supabase.auth.signOut({ scope: "local" });
         if (error) throw error;
       } catch (error) {
         if (disposed) return;
@@ -143,7 +149,8 @@ const { error } = await supabase.auth.signOut({
     sessionStorage.setItem(STORAGE_KEY, String(Date.now()));
     warningRef.current = false;
     setWarning(false);
+    setDeadline(null);
   }
 
-  return { warning, staySignedIn };
+  return { warning, deadline, staySignedIn };
 }

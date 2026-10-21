@@ -1,20 +1,3 @@
-export function getDaysInMonth(year, month) {
-  // month: 1–12
-  const days = [];
-  const total = new Date(year, month, 0).getDate();
-
-  for (let d = 1; d <= total; d++) {
-    days.push({
-      day: d,
-      iso: `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`,
-      weekday: new Date(year, month - 1, d).toLocaleDateString("en-US", {
-        weekday: "short",
-      }),
-    });
-  }
-
-  return days;
-}
 /**
  * Returns the days for a payroll period.
  * @param {number} year   Anchor year (the month the period ends in)
@@ -53,4 +36,32 @@ export function getPayrollPeriodDays(year, month, period) {
     cur.setDate(cur.getDate() + 1);
   }
   return days;
+}
+
+export const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+// "September – October 2026" or "October 2026". Reads the ISO parts directly:
+// `new Date("YYYY-MM-DD")` is UTC and can land on the previous day west of UTC.
+export function periodTitle(days, month, year) {
+  const first = days[0];
+  const last = days[days.length - 1];
+  if (!first || !last) return `${MONTHS[month - 1]} ${year}`;
+  const [fy, fm] = first.iso.split("-").map(Number);
+  const [ly, lm] = last.iso.split("-").map(Number);
+  if (fm === lm && fy === ly) return `${MONTHS[fm - 1]} ${fy}`;
+  if (fy === ly) return `${MONTHS[fm - 1]} – ${MONTHS[lm - 1]} ${fy}`;
+  return `${MONTHS[fm - 1]} ${fy} – ${MONTHS[lm - 1]} ${ly}`;
 }

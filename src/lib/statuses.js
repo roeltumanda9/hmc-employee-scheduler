@@ -1,18 +1,10 @@
 // Every shift the app knows about.
 export const STATUSES = [
-  // DUTY — varies per department
+  // DUTY — time varies per department (departments.shift_times)
   {
   code: "DUTY",
   label: "Duty",
   time: "10:00 AM – 7:00 PM",
-  timeByDepartment: {
-    Amysthetic: "10:00 AM – 7:00 PM",
-    "JA Grocery / Pharmacy": "8:00 AM – 5:00 PM",
-    Wellness: "8:00 AM – 5:00 PM",
-    Johanju: "9:00 AM – 6:00 PM",
-    HMC: "8:00 AM – 5:00 PM",
-    "HMC Laboratory": "8:00 AM – 5:00 PM",
-  },
   classes: "bg-sky-500 text-white",
 },
 
@@ -109,33 +101,5 @@ export const STATUSES = [
 
 export const STATUS_MAP = Object.fromEntries(STATUSES.map((s) => [s.code, s]));
 
-export const STATUSES_BY_DEPARTMENT = {
-  Amysthetic: ["DUTY", "IL", "OFF"],
-  "H Hotel": ["AM", "PM", "MS", "NS", "G", "9-6", "IL", "OFF"],
-  "JA Grocery / Pharmacy": ["AM", "PM", "DUTY", "IL", "OFF"],
-  Wellness: ["DUTY", "IL", "OFF"],
-  Johanju: ["9-6", "C3", "IL", "OFF"],
-  HMC: ["DUTY", "AS", "IL", "OFF"],
-  "HMC Laboratory": ["AM", "DUTY", "IL", "OFF"],
-  Hofitea: ["RS", "LS", "ES", "IL", "OFF"],
-};
-
-export function statusesForDepartment(department) {
-  const codes = STATUSES_BY_DEPARTMENT[department] || ["OFF"];
-  return codes.map((code) => STATUS_MAP[code]).filter(Boolean);
-}
-
-export function resolveStatus(status, department) {
-  if (!status) return status;
-  if (status.timeByDepartment && status.timeByDepartment[department]) {
-    return { ...status, time: status.timeByDepartment[department] };
-  }
-  return status;
-}
-
-export function statusesForDepartmentResolved(department) {
-  const codes = STATUSES_BY_DEPARTMENT[department] || ["OFF"];
-  return codes
-    .map((code) => resolveStatus(STATUS_MAP[code], department))
-    .filter(Boolean);
-}
+// Which shifts each department may use, and its time overrides, are settings:
+// see src/lib/settings.js (`shiftsForDepartment`, `resolveShift`).

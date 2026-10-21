@@ -27,12 +27,12 @@ export default function LoginPage() {
         <div className="flex flex-col items-center text-center gap-3 mb-6">
           <img
             src="/logo.png"
-            alt="Hofilena Medical Centrum"
+            alt="Hofileña Medical Centrum"
             className="w-20 h-20 rounded-full bg-white p-0.5 ring-1 ring-green-100"
           />
           <div>
             <h1 className="text-lg font-bold tracking-tight leading-tight text-green-900">
-              Hofilena Medical Centrum
+              Hofileña Medical Centrum
             </h1>
             <p className="text-sm text-green-700/70 leading-tight mt-1">
               Employee Scheduler
