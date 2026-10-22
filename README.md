@@ -49,21 +49,3 @@ A web app for planning staff shifts across Hofileña Medical Centrum and its sis
 | **User** | View schedules only |
 
 These permissions are enforced on the server, not just hidden in the app. There is no public sign-up: accounts are created by an administrator.
-
-## Running it locally
-
-Requires Node.js 20 or newer and a `.env` file with the Supabase URL and anon key (see `.env.example`).
-
-```bash
-npm install
-npm run dev
-```
-
-| Command | What it does |
-|---|---|
-| `npm run dev` | Start the app locally |
-| `npm run build` | Build for production into `dist/` |
-| `npm test` | Run the automated tests |
-| `npm run lint` | Check the code for problems |
-
-Built with React 19, Vite, Tailwind CSS v4 and Supabase.
