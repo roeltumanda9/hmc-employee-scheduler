@@ -4,42 +4,112 @@ import { shiftsForDepartment, useSettings } from "../lib/settings";
 import { handleMenuKeyDown } from "../lib/useDialog";
 import Icon from "./Icon";
 
-// Fixed large sizes for readability
-const SIZES = {
-  empW: 280,
-  dayW: 88,
-  summaryW: 96,
-  cellH: 56,
-  cellPad: "p-1",
-  cellRadius: "rounded-[10px]",
-  cellText: "text-[0.9375rem]",
-  nameText: "text-base",
-  metaText: "text-xs",
-  dayNum: "text-base",
-  dayNumCircle: "w-9 h-9",
-  weekday: "text-[0.6875rem]",
-  summaryText: "text-base",
-  totalText: "text-base",
+/* ------------------------------------------------------------------
+   Layout
+   Desktop ("fit"): columns are sized from the measured pane width so the
+   whole period (name + every day + 4 totals) fits with no horizontal
+   scroll. Phones and narrow tablets fall back to fixed sizes and scroll
+   sideways with the name column pinned.
+   Sizes are in px (not rem) because the root font is 18px on desktop.
+   ------------------------------------------------------------------ */
+
+// Smallest usable day column when fitting; below this we scroll instead.
+const MIN_FIT_DAY = 33;
+
+// Fit-mode type/cell scale, chosen by how wide each day column ends up.
+const FIT_TIERS = [
+  {
+    upTo: 42, // 1280px-class screens
+    cellH: 34,
+    cellPad: "p-[2px]",
+    cellRadius: "rounded-md",
+    cellText: "text-[10.5px] tracking-[-0.02em]",
+    nameText: "text-[13px]",
+    metaText: "text-[11px]",
+    dayNum: "text-[12.5px]",
+    dayNumCircle: "w-[24px] h-[24px]",
+    weekday: "text-[9.5px]",
+    summaryText: "text-[13px]",
+  },
+  {
+    upTo: 56, // 1366–1600px
+    cellH: 40,
+    cellPad: "p-[3px]",
+    cellRadius: "rounded-lg",
+    cellText: "text-[12px]",
+    nameText: "text-[14px]",
+    metaText: "text-[11.5px]",
+    dayNum: "text-[14px]",
+    dayNumCircle: "w-[28px] h-[28px]",
+    weekday: "text-[10px]",
+    summaryText: "text-[14px]",
+  },
+  {
+    upTo: Infinity, // 1680px and up
+    cellH: 46,
+    cellPad: "p-1",
+    cellRadius: "rounded-[10px]",
+    cellText: "text-[13.5px]",
+    nameText: "text-[15px]",
+    metaText: "text-[12px]",
+    dayNum: "text-[15px]",
+    dayNumCircle: "w-[32px] h-[32px]",
+    weekday: "text-[11px]",
+    summaryText: "text-[15px]",
+  },
+];
+
+// Tablets / small windows: fixed sizes, horizontal scroll.
+const SCROLL_SIZES = {
+  empW: 200,
+  dayW: 60,
+  summaryW: 76,
+  cellH: 48,
+  cellPad: "p-[3px]",
+  cellRadius: "rounded-lg",
+  cellText: "text-[13px]",
+  nameText: "text-[15px]",
+  metaText: "text-[12px]",
+  dayNum: "text-[14px]",
+  dayNumCircle: "w-[30px] h-[30px]",
+  weekday: "text-[10.5px]",
+  summaryText: "text-[15px]",
 };
 
-// Phones: narrower name column and cells so ~5 days fit on screen, while
-// each cell stays a comfortable ≥44px touch target.
+// Phones: ~5 days on screen, each cell still a ≥44px touch target.
 const COMPACT_SIZES = {
   empW: 124,
   dayW: 52,
-  summaryW: 60,
+  summaryW: 64,
   cellH: 44,
   cellPad: "p-[3px]",
   cellRadius: "rounded-lg",
-  cellText: "text-[0.8125rem]",
-  nameText: "text-[0.8125rem]",
-  metaText: "text-[0.6875rem]",
-  dayNum: "text-sm",
-  dayNumCircle: "w-7 h-7",
-  weekday: "text-[0.625rem]",
-  summaryText: "text-sm",
-  totalText: "text-sm",
+  cellText: "text-[13px]",
+  nameText: "text-[13px]",
+  metaText: "text-[11px]",
+  dayNum: "text-[14px]",
+  dayNumCircle: "w-[28px] h-[28px]",
+  weekday: "text-[10px]",
+  summaryText: "text-[14px]",
 };
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+function computeLayout(paneWidth, dayCount, compact) {
+  if (compact) return { ...COMPACT_SIZES, fit: false };
+  if (paneWidth > 0 && dayCount > 0) {
+    const empW = Math.round(clamp(paneWidth * 0.18, 160, 260));
+    const summaryW = Math.round(clamp(paneWidth * 0.055, 52, 84));
+    // Floor to 1/100 px so rounding can never push the table past the pane.
+    const dayW =
+      Math.floor(((paneWidth - empW - 4 * summaryW) / dayCount) * 100) / 100;
+    if (dayW >= MIN_FIT_DAY) {
+      const tier = FIT_TIERS.find((t) => dayW < t.upTo);
+      return { ...tier, empW, summaryW, dayW, fit: true };
+    }
+  }
+  return { ...SCROLL_SIZES, fit: false };
+}
 
 const COMPACT_QUERY = "(max-width: 639px)";
 
@@ -106,22 +176,12 @@ export default function ScheduleGrid({
 }) {
   const compact = useMediaQuery(COMPACT_QUERY);
   const settings = useSettings();
-  const z = compact ? COMPACT_SIZES : SIZES;
   const paneRef = useRef(null);
   const paneWidth = useElementWidth(paneRef);
-
-  // Summary columns pin to the right edge when the pane is wide enough to
-  // still show a few days between them and the pinned name column (not on
-  // phones or narrow tablets, where they'd cover every day).
-  // `slot` counts from the right: Total = 0, Off = 1, Present = 2, IL = 3.
-  const pinSummary =
-    !compact && paneWidth >= z.empW + 4 * z.summaryW + 4 * z.dayW;
-  const pinRight = (slot) =>
-    pinSummary ? { position: "sticky", right: slot * z.summaryW } : undefined;
-  // Divider + shadow where the pinned summary block starts.
-  const pinEdge = pinSummary
-    ? "border-l border-slate-200 shadow-[-8px_0_12px_-8px_rgb(15_23_42/0.12)]"
-    : "border-l border-slate-200";
+  const z = computeLayout(paneWidth, days.length, compact);
+  // Narrow totals columns get one-word headers (full text stays in aria-label).
+  const shortLabels = z.summaryW < 76;
+  const showRowNumber = !compact && z.empW >= 220;
 
   const lookup = {};
   for (const s of schedules) {
@@ -167,20 +227,27 @@ export default function ScheduleGrid({
     ? "max-h-[calc(100dvh-4.5rem)]"
     : "max-h-[calc(100dvh-9.5rem)]";
 
+  const SUMMARY = [
+    { key: "il", full: ["Incentive", "Leave"], short: "IL", head: "bg-emerald-50 text-emerald-800", foot: "bg-emerald-50 text-emerald-800", body: "text-emerald-800" },
+    { key: "present", full: ["Physical", "Present"], short: "Present", head: "bg-green-50 text-green-800", foot: "bg-green-50 text-green-800", body: "text-green-700" },
+    { key: "off", full: ["Physical", "Off"], short: "Off", head: "bg-rose-50 text-rose-700", foot: "bg-rose-50 text-rose-700", body: "text-rose-600" },
+    { key: "total", full: ["Total", "Working Days"], short: "Total", head: "bg-slate-100 text-slate-700", foot: "bg-slate-100 text-slate-800", body: "text-slate-900" },
+  ];
+
   return (
     <div className="-mx-4 sm:mx-0 bg-white border-y border-slate-900/[0.07] sm:border-0 sm:rounded-2xl sm:ring-1 sm:ring-slate-900/[0.06] shadow-card overflow-hidden">
       <div
         ref={paneRef}
-        className={`group/grid overflow-auto overscroll-x-contain scroll-thin ${paneHeight} sm:max-h-[calc(100dvh-6rem)] lg:max-h-[calc(100dvh-12rem)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-green-600`}
+        className={`group/grid ${z.fit ? "overflow-y-auto overflow-x-hidden" : "overflow-auto overscroll-x-contain"} [scrollbar-gutter:stable] scroll-thin ${paneHeight} sm:max-h-[calc(100dvh-6rem)] lg:max-h-[calc(100dvh-12rem)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-green-600`}
         role="region"
         aria-label="Schedule grid"
         tabIndex={0}
         onScroll={onGridScroll}
         // Keyboard focus never lands under the pinned name column/header.
-        style={{ scrollPaddingLeft: z.empW, scrollPaddingTop: compact ? 56 : 72 }}
+        style={{ scrollPaddingLeft: z.empW, scrollPaddingTop: 64 }}
       >
-        {/* Fixed layout with an explicit width so columns keep their sizes
-            (auto layout squeezes them to fit, breaking the pinned columns). */}
+        {/* Fixed layout with an explicit width so columns keep the computed
+            sizes (in fit mode the sum equals the pane width). */}
         <table
           className="border-separate border-spacing-0"
           style={{
@@ -194,19 +261,18 @@ export default function ScheduleGrid({
             {days.map((d) => (
               <col key={d.iso} style={{ width: z.dayW }} />
             ))}
-            <col style={{ width: z.summaryW }} />
-            <col style={{ width: z.summaryW }} />
-            <col style={{ width: z.summaryW }} />
-            <col style={{ width: z.summaryW }} />
+            {SUMMARY.map((s) => (
+              <col key={s.key} style={{ width: z.summaryW }} />
+            ))}
           </colgroup>
 
           <thead>
             <tr>
               <th
                 scope="col"
-                className={`sticky left-0 top-0 z-30 bg-white border-b border-r border-slate-200 px-3 sm:px-4 py-2 text-left align-bottom ${NAME_SHADOW}`}
+                className={`sticky left-0 top-0 z-30 bg-white border-b border-r border-slate-200 px-3 ${z.fit ? "lg:px-4" : ""} py-2 text-left align-bottom ${NAME_SHADOW}`}
               >
-                <span className="text-[0.625rem] sm:text-[0.6875rem] uppercase tracking-[0.08em] text-slate-500 font-semibold">
+                <span className="text-[10px] sm:text-[11px] uppercase tracking-[0.08em] text-slate-500 font-semibold">
                   Employee
                 </span>
               </th>
@@ -219,12 +285,12 @@ export default function ScheduleGrid({
                     key={d.iso}
                     scope="col"
                     aria-label={spokenDate(d)}
-                    className={`sticky top-0 z-20 border-b border-slate-200 ${dayBorder(d)} px-0.5 py-1.5 sm:py-2 text-center ${HEAD_SHADOW} ${
+                    className={`sticky top-0 z-20 border-b border-slate-200 ${dayBorder(d)} px-0 py-1.5 text-center ${HEAD_SHADOW} ${
                       isToday ? "bg-green-50" : weekend ? "bg-slate-50" : "bg-white"
                     }`}
                   >
                     <div
-                      className={`${z.weekday} uppercase tracking-[0.06em] font-semibold leading-none ${
+                      className={`${z.weekday} uppercase tracking-[0.04em] font-semibold leading-none ${
                         isToday
                           ? "text-green-700"
                           : weekend
@@ -246,50 +312,30 @@ export default function ScheduleGrid({
                   </th>
                 );
               })}
-              <th
-                scope="col"
-                style={pinRight(3)}
-                className={`sticky top-0 z-30 bg-emerald-50 border-b border-r border-slate-200 ${pinEdge} px-1 py-2 text-center ${HEAD_SHADOW}`}
-              >
-                <div className="text-[0.625rem] uppercase tracking-wide text-emerald-800 font-semibold leading-tight">
-                  Incentive
-                  <br />
-                  Leave
-                </div>
-              </th>
-              <th
-                scope="col"
-                style={pinRight(2)}
-                className={`sticky top-0 z-30 bg-green-50 border-b border-r border-slate-200 px-1 py-2 text-center ${HEAD_SHADOW}`}
-              >
-                <div className="text-[0.625rem] uppercase tracking-wide text-green-800 font-semibold leading-tight">
-                  Physical
-                  <br />
-                  Present
-                </div>
-              </th>
-              <th
-                scope="col"
-                style={pinRight(1)}
-                className={`sticky top-0 z-30 bg-rose-50 border-b border-r border-slate-200 px-1 py-2 text-center ${HEAD_SHADOW}`}
-              >
-                <div className="text-[0.625rem] uppercase tracking-wide text-rose-700 font-semibold leading-tight">
-                  Physical
-                  <br />
-                  Off
-                </div>
-              </th>
-              <th
-                scope="col"
-                style={pinRight(0)}
-                className={`sticky top-0 z-30 bg-slate-100 border-b border-slate-200 px-1 py-2 text-center ${HEAD_SHADOW}`}
-              >
-                <div className="text-[0.625rem] uppercase tracking-wide text-slate-700 font-semibold leading-tight">
-                  Total
-                  <br />
-                  Working Days
-                </div>
-              </th>
+
+              {SUMMARY.map((s, i) => (
+                <th
+                  key={s.key}
+                  scope="col"
+                  aria-label={s.full.join(" ")}
+                  title={s.full.join(" ")}
+                  className={`sticky top-0 z-20 ${s.head} border-b border-slate-200 ${
+                    i === 0 ? "border-l" : ""
+                  } ${i < 3 ? "border-r" : ""} px-1 py-2 text-center ${HEAD_SHADOW}`}
+                >
+                  {shortLabels ? (
+                    <span className="text-[11px] font-semibold leading-tight">
+                      {s.short}
+                    </span>
+                  ) : (
+                    <span className="block text-[10px] uppercase tracking-wide font-semibold leading-tight">
+                      {s.full[0]}
+                      <br />
+                      {s.full[1]}
+                    </span>
+                  )}
+                </th>
+              ))}
             </tr>
           </thead>
 
@@ -305,6 +351,7 @@ export default function ScheduleGrid({
                 else if (st === "OFF") off++;
               }
               const total = present;
+              const values = { il, present, off, total };
 
               // Opaque backgrounds: pinned cells must hide what scrolls beneath.
               const hoverBg = readOnly ? "" : "group-hover:bg-green-50";
@@ -320,13 +367,13 @@ export default function ScheduleGrid({
                   <th
                     scope="row"
                     title={emp.name}
-                    className={`sticky left-0 z-10 bg-white ${hoverBg} border-b border-r border-slate-100 px-3 sm:px-4 py-1.5 text-left font-normal transition-colors ${NAME_SHADOW}`}
+                    className={`sticky left-0 z-10 bg-white ${hoverBg} border-b border-r border-slate-100 px-3 ${z.fit ? "lg:px-4" : ""} py-1 text-left font-normal transition-colors ${NAME_SHADOW}`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       {/* Row number (display only — not the employee number) */}
-                      {!compact && (
+                      {showRowNumber && (
                         <div
-                          className="w-6 shrink-0 text-right text-sm font-medium text-slate-400 tabular-nums"
+                          className="w-5 shrink-0 text-right text-[12px] font-medium text-slate-400 tabular-nums"
                           aria-hidden="true"
                         >
                           {idx + 1}
@@ -342,7 +389,7 @@ export default function ScheduleGrid({
                           {emp.name}
                         </div>
                         <div
-                          className={`${z.metaText} text-slate-500 truncate leading-tight mt-0.5`}
+                          className={`${z.metaText} text-slate-500 truncate leading-tight`}
                         >
                           {emp.role}
                         </div>
@@ -379,42 +426,20 @@ export default function ScheduleGrid({
                       </td>
                     );
                   })}
-                  <td
-                    style={pinRight(3)}
-                    className={`z-10 bg-white ${hoverBg} border-b border-r border-slate-100 ${pinEdge} px-1 py-2 text-center transition-colors`}
-                  >
-                    <SummaryNumber
-                      value={il}
-                      className={`text-emerald-800 ${z.summaryText}`}
-                    />
-                  </td>
-                  <td
-                    style={pinRight(2)}
-                    className={`z-10 bg-white ${hoverBg} border-b border-r border-slate-100 px-1 py-2 text-center transition-colors`}
-                  >
-                    <SummaryNumber
-                      value={present}
-                      className={`text-green-700 ${z.summaryText}`}
-                    />
-                  </td>
-                  <td
-                    style={pinRight(1)}
-                    className={`z-10 bg-white ${hoverBg} border-b border-r border-slate-100 px-1 py-2 text-center transition-colors`}
-                  >
-                    <SummaryNumber
-                      value={off}
-                      className={`text-rose-600 ${z.summaryText}`}
-                    />
-                  </td>
-                  <td
-                    style={pinRight(0)}
-                    className="z-10 bg-slate-50 border-b border-slate-100 px-1 py-2 text-center"
-                  >
-                    <SummaryNumber
-                      value={total}
-                      className={`text-slate-900 ${z.summaryText}`}
-                    />
-                  </td>
+
+                  {SUMMARY.map((s, i) => (
+                    <td
+                      key={s.key}
+                      className={`${s.key === "total" ? "bg-slate-50" : `bg-white ${hoverBg}`} border-b border-slate-100 ${
+                        i === 0 ? "border-l border-l-slate-200" : ""
+                      } ${i < 3 ? "border-r" : ""} px-1 text-center transition-colors`}
+                    >
+                      <SummaryNumber
+                        value={values[s.key]}
+                        className={`${s.body} ${z.summaryText}`}
+                      />
+                    </td>
+                  ))}
                 </tr>
               );
             })}
@@ -425,20 +450,20 @@ export default function ScheduleGrid({
             <tr>
               <th
                 scope="row"
-                className={`sticky left-0 bottom-0 z-30 bg-green-50 border-t border-green-200 border-r border-r-slate-200 px-3 sm:px-4 py-2 sm:py-2.5 text-left font-normal ${NAME_SHADOW}`}
+                className={`sticky left-0 bottom-0 z-30 bg-green-50 border-t border-green-200 border-r border-r-slate-200 px-3 ${z.fit ? "lg:px-4" : ""} py-2 text-left font-normal ${NAME_SHADOW}`}
               >
                 <div className="flex items-center gap-2.5">
                   <div
-                    className="hidden sm:grid w-7 h-7 rounded-lg bg-green-600 text-white place-items-center shadow-brand shrink-0"
+                    className="hidden sm:grid w-6 h-6 rounded-md bg-green-600 text-white place-items-center shadow-brand shrink-0"
                     aria-hidden="true"
                   >
-                    <Icon name="users" size={14} strokeWidth={2.5} />
+                    <Icon name="users" size={12} strokeWidth={2.5} />
                   </div>
-                  <div>
-                    <div className="text-[0.6875rem] uppercase tracking-[0.06em] text-green-800 font-bold leading-tight">
+                  <div className="min-w-0">
+                    <div className="text-[11px] uppercase tracking-[0.06em] text-green-800 font-bold leading-tight">
                       Total manpower
                     </div>
-                    <div className="text-[0.625rem] text-green-700/80 leading-tight">
+                    <div className="text-[10px] text-green-700/80 leading-tight">
                       of the day
                     </div>
                   </div>
@@ -456,7 +481,7 @@ export default function ScheduleGrid({
                     }`}
                   >
                     <span
-                      className={`font-bold tabular-nums ${z.totalText} ${
+                      className={`font-bold tabular-nums ${z.summaryText} ${
                         count > 0 ? "text-green-800" : "text-green-300"
                       }`}
                     >
@@ -465,38 +490,19 @@ export default function ScheduleGrid({
                   </td>
                 );
               })}
-              <td
-                style={pinRight(3)}
-                className={`sticky bottom-0 z-30 bg-emerald-50 border-t border-green-200 border-r border-r-slate-200 ${pinEdge} py-2 text-center`}
-              >
-                <span className={`font-bold tabular-nums text-emerald-800 ${z.totalText}`}>
-                  {grandIL}
-                </span>
-              </td>
-              <td
-                style={pinRight(2)}
-                className="sticky bottom-0 z-30 bg-green-50 border-t border-green-200 border-r border-r-slate-200 py-2 text-center"
-              >
-                <span className={`font-bold tabular-nums text-green-800 ${z.totalText}`}>
-                  {grandPresent}
-                </span>
-              </td>
-              <td
-                style={pinRight(1)}
-                className="sticky bottom-0 z-30 bg-rose-50 border-t border-green-200 border-r border-r-slate-200 py-2 text-center"
-              >
-                <span className={`font-bold tabular-nums text-rose-700 ${z.totalText}`}>
-                  {grandOff}
-                </span>
-              </td>
-              <td
-                style={pinRight(0)}
-                className="sticky bottom-0 z-30 bg-slate-100 border-t border-green-200 py-2 text-center"
-              >
-                <span className={`font-bold tabular-nums text-slate-800 ${z.totalText}`}>
-                  {grandTotal}
-                </span>
-              </td>
+
+              {SUMMARY.map((s, i) => (
+                <td
+                  key={s.key}
+                  className={`sticky bottom-0 z-20 ${s.foot} border-t border-green-200 ${
+                    i === 0 ? "border-l border-l-slate-200" : ""
+                  } ${i < 3 ? "border-r border-r-slate-200" : ""} py-2 text-center`}
+                >
+                  <span className={`font-bold tabular-nums ${z.summaryText}`}>
+                    {{ il: grandIL, present: grandPresent, off: grandOff, total: grandTotal }[s.key]}
+                  </span>
+                </td>
+              ))}
             </tr>
           </tfoot>
         </table>
@@ -539,7 +545,7 @@ function CellButton({
 
   const look = current
     ? `${current.classes} shadow-[inset_0_0_0_1px_rgb(15_23_42/0.06)] ${
-        readOnly ? "" : "hover:shadow-[inset_0_0_0_2px_rgb(15_23_42/0.16)]"
+        readOnly ? "" : "hover:shadow-[inset_0_0_0_2px_rgb(15_23_42/0.18)]"
       }`
     : readOnly
       ? "text-slate-300"
@@ -558,7 +564,7 @@ function CellButton({
         aria-label={`${label}: ${current?.label || "No shift"}`}
         aria-haspopup={readOnly ? undefined : "menu"}
         aria-expanded={readOnly ? undefined : open}
-        className={`w-full grid place-items-center ${radiusClass} ${textClass} font-bold tracking-tight leading-none transition-[transform,box-shadow,background-color,border-color,color] duration-150 ${
+        className={`w-full grid place-items-center overflow-hidden whitespace-nowrap ${radiusClass} ${textClass} font-bold leading-none transition-[transform,box-shadow,background-color,border-color,color] duration-150 ${
           readOnly ? "cursor-default select-none" : "active:scale-[0.94]"
         } ${look} ${open ? "ring-2 ring-green-600 ring-offset-1" : ""}`}
         title={
@@ -568,7 +574,7 @@ function CellButton({
         }
       >
         {status ||
-          (readOnly ? "—" : <Icon name="plus" size={compact ? 14 : 16} strokeWidth={2.5} />)}
+          (readOnly ? "—" : <Icon name="plus" size={14} strokeWidth={2.5} />)}
       </button>
 
       {!readOnly && open && (
@@ -594,8 +600,8 @@ function CellButton({
 /* ---- Popup ----
    Desktop: floats next to the cell, measured after render and clamped to the
    viewport (scrolls internally if taller than the screen).
-   Phones: a bottom sheet with large two-column tiles, so it can never hang
-   off the side and every option is an easy thumb target. */
+   Phones: a bottom sheet with large two-column tiles, a pinned header and
+   page scroll locked behind it. */
 function Popup({ anchorRef, label, name, dateText, current, statuses, compact, onClose, onPick }) {
   const ref = useRef(null);
   const [style, setStyle] = useState({ visibility: "hidden" });
@@ -635,6 +641,16 @@ function Popup({ anchorRef, label, name, dateText, current, statuses, compact, o
     };
   }, [anchorRef, compact]);
 
+  // The sheet covers the page on phones; keep the page from scrolling behind it.
+  useEffect(() => {
+    if (!compact) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [compact]);
+
   // Move focus into the menu: the current shift, else the first option.
   useEffect(() => {
     const el = ref.current;
@@ -650,7 +666,7 @@ function Popup({ anchorRef, label, name, dateText, current, statuses, compact, o
   return (
     <>
       <div
-        className={`fixed inset-0 z-40 ${compact ? "bg-slate-950/40 animate-fade-in" : ""}`}
+        className={`fixed inset-0 z-40 ${compact ? "bg-slate-950/40 backdrop-blur-[1px] animate-fade-in" : ""}`}
         onClick={() => onClose(false)}
       />
       <div
@@ -660,41 +676,45 @@ function Popup({ anchorRef, label, name, dateText, current, statuses, compact, o
         onKeyDown={(e) => handleMenuKeyDown(e, ref.current, onClose)}
         className={
           compact
-            ? "fixed z-50 inset-x-0 bottom-0 max-h-[82dvh] overflow-y-auto overscroll-contain bg-white rounded-t-3xl shadow-overlay animate-sheet-up pb-[max(1rem,env(safe-area-inset-bottom))]"
+            ? "fixed z-50 inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto overscroll-contain bg-white rounded-t-[28px] shadow-overlay animate-sheet-up pb-[max(1rem,env(safe-area-inset-bottom))]"
             : "fixed z-50 w-80 max-w-[calc(100vw-16px)] overflow-y-auto overscroll-contain scroll-thin bg-white rounded-2xl shadow-overlay p-1.5 animate-pop-in"
         }
         style={compact ? undefined : style}
       >
-        {compact && (
-          <div className="pt-2.5 pb-1" aria-hidden="true">
-            <div className="mx-auto h-1.5 w-10 rounded-full bg-slate-200" />
-          </div>
-        )}
-
         <div
-          className={compact ? "px-5 pt-2 pb-4 flex items-start gap-3" : "px-3 pt-2 pb-2"}
+          className={compact ? "sticky top-0 z-10 bg-white/95 backdrop-blur rounded-t-[28px] border-b border-slate-100" : ""}
           aria-hidden="true"
         >
-          <div className="min-w-0 flex-1">
-            <div className="text-[0.6875rem] uppercase tracking-[0.08em] text-slate-400 font-semibold">
-              Set shift · {dateText}
+          {compact && (
+            <div className="pt-2.5 pb-1">
+              <div className="mx-auto h-1.5 w-10 rounded-full bg-slate-200" />
             </div>
-            <div
-              className={`font-semibold text-slate-900 truncate ${compact ? "text-base mt-0.5" : "text-sm"}`}
-            >
-              {name}
-            </div>
-          </div>
-          {compact && currentShift && (
-            <span
-              className={`shrink-0 mt-1 inline-flex items-center h-7 px-2.5 rounded-lg text-xs font-bold ${currentShift.classes}`}
-            >
-              {currentShift.code}
-            </span>
           )}
+
+          <div className={compact ? "px-5 pt-1.5 pb-3.5 flex items-center gap-3" : "px-3 pt-2 pb-2"}>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400 font-semibold">
+                Set shift · {dateText}
+              </div>
+              <div
+                className={`font-semibold text-slate-900 truncate ${compact ? "text-base mt-0.5" : "text-sm"}`}
+              >
+                {name}
+              </div>
+            </div>
+            {compact && (
+              <span
+                className={`shrink-0 inline-flex items-center justify-center min-w-[3rem] h-8 px-2.5 rounded-lg text-xs font-bold ${
+                  currentShift ? currentShift.classes : "bg-slate-50 text-slate-400 ring-1 ring-inset ring-slate-200"
+                }`}
+              >
+                {currentShift ? currentShift.code : "—"}
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className={compact ? "grid grid-cols-2 gap-2 px-4" : "space-y-0.5"}>
+        <div className={compact ? "grid grid-cols-2 gap-2 px-4 pt-3.5" : "space-y-0.5"}>
           {statuses.map((s) => {
             const selected = current === s.code;
             return (
@@ -706,10 +726,10 @@ function Popup({ anchorRef, label, name, dateText, current, statuses, compact, o
                 onClick={() => onPick(s.code)}
                 className={
                   compact
-                    ? `relative flex flex-col items-start gap-2 p-3 rounded-2xl text-left transition active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-green-600 ${
+                    ? `relative flex flex-col items-start gap-2 min-h-[5.5rem] p-3 rounded-2xl text-left transition active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-green-600 ${
                         selected
                           ? "bg-green-50 ring-2 ring-green-600"
-                          : "bg-white ring-1 ring-slate-200"
+                          : "bg-white ring-1 ring-slate-200 active:bg-slate-50"
                       }`
                     : `w-full flex items-center gap-3 px-2.5 py-2 text-sm rounded-xl text-left transition-colors focus:outline-none hover:bg-slate-100 focus:bg-slate-100 ${
                         selected ? "bg-green-50 hover:bg-green-50 focus:bg-green-100" : ""
@@ -725,9 +745,11 @@ function Popup({ anchorRef, label, name, dateText, current, statuses, compact, o
                   <span className="block text-sm text-slate-900 font-medium truncate">
                     {s.label}
                   </span>
-                  <span className="block text-xs text-slate-500 mt-0.5 truncate">
-                    {s.time || " "}
-                  </span>
+                  {s.time && (
+                    <span className="block text-xs text-slate-500 mt-0.5 truncate">
+                      {s.time}
+                    </span>
+                  )}
                 </span>
                 {selected && (
                   <span
@@ -745,20 +767,36 @@ function Popup({ anchorRef, label, name, dateText, current, statuses, compact, o
           })}
         </div>
 
-        <div className={compact ? "px-4 pt-3" : "mt-1 pt-1 border-t border-slate-100"}>
+        <div
+          className={
+            compact
+              ? "grid grid-cols-2 gap-2 px-4 pt-3"
+              : "mt-1 pt-1 border-t border-slate-100"
+          }
+        >
           <button
             type="button"
             role="menuitem"
             onClick={() => onPick(null)}
             className={
               compact
-                ? "w-full h-12 inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-50 text-rose-700 text-sm font-semibold active:scale-[0.98] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                ? "h-12 inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-50 text-rose-700 text-sm font-semibold active:scale-[0.98] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                 : "w-full flex items-center gap-2 text-left px-3 py-2.5 text-sm rounded-xl hover:bg-rose-50 focus:bg-rose-50 focus:outline-none text-rose-600 font-medium transition-colors"
             }
           >
             <Icon name="trash" size={15} />
             Clear
           </button>
+          {compact && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => onClose(true)}
+              className="h-12 inline-flex items-center justify-center rounded-2xl bg-slate-100 text-slate-700 text-sm font-semibold active:scale-[0.98] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </div>
     </>
