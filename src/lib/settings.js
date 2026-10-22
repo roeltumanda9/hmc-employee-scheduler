@@ -20,6 +20,8 @@ export const DEFAULT_SETTINGS = {
   source: "defaults",
   loadError: "",
   shiftsSource: "defaults",
+  // True once supabase/proposed_leave_types.sql has added shift_types.is_leave.
+  leaveColumn: false,
   shiftsError: "",
 };
 
@@ -61,6 +63,7 @@ function shiftsFrom(res) {
       makeShift({ ...row, time: row.default_time }),
     ),
     shiftsSource: "database",
+    leaveColumn: res.data.some((row) => "is_leave" in row),
     shiftsError: "",
   };
 }
@@ -147,10 +150,21 @@ export function resolveShift(settings, code, departmentName) {
   return time ? { ...base, time } : base;
 }
 
-// The shifts a department may use, in its configured order.
+// The work shifts a department may use, in its configured order. Leave types
+// aren't per department: every department gets them all (`leaveTypes`).
 export function shiftsForDepartment(settings, departmentName) {
   const codes = findDepartment(settings, departmentName)?.shifts || ["OFF"];
   return codes
     .map((code) => resolveShift(settings, code, departmentName))
-    .filter(Boolean);
+    .filter((s) => s && !s.isLeave);
+}
+
+/** Every leave type, in order (the Scheduler's "Leave" picker). */
+export function leaveTypes(settings) {
+  return settings.shifts.filter((s) => s.isLeave);
+}
+
+/** `(code) => boolean` for tallyDays / isWorking. Unknown codes aren't leave. */
+export function leaveChecker(settings) {
+  return (code) => !!findShift(settings, code)?.isLeave;
 }

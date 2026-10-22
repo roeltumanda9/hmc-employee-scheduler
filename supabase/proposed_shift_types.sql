@@ -37,7 +37,8 @@ create table public.shift_types (
 alter table public.shift_types enable row level security;
 
 -- Read: any signed-in account with a known role. Write: super_admin only.
--- OFF and IL drive the day totals, so they can never be deleted.
+-- OFF drives the day totals, so it can never be deleted (IL was protected too
+-- until supabase/proposed_leave_types.sql Step 3 made every leave type equal).
 create policy shift_types_select_by_role on public.shift_types
   for select to authenticated
   using ((select public.current_app_role()) = any (array['super_admin', 'admin', 'user']));

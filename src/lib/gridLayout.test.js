@@ -1,0 +1,46 @@
+import { describe, expect, it } from "vitest";
+import {
+  COMPACT_SIZES,
+  MIN_FIT_DAY,
+  SCROLL_SIZES,
+  computeLayout,
+} from "./gridLayout";
+
+const tableWidth = (z, days) => z.empW + days * z.dayW + 4 * z.summaryW;
+
+describe("computeLayout", () => {
+  it("fits a 16-day period with no horizontal scroll on a 1280px laptop", () => {
+    const z = computeLayout(928, 16, false); // grid pane width at 1280px
+    expect(z.fit).toBe(true);
+    expect(z.dayW).toBeGreaterThanOrEqual(MIN_FIT_DAY);
+    expect(tableWidth(z, 16)).toBeLessThanOrEqual(928);
+  });
+
+  it("never makes the table wider than the pane when it fits", () => {
+    for (let pane = 700; pane <= 2600; pane += 3) {
+      for (const days of [13, 14, 15, 16]) {
+        const z = computeLayout(pane, days, false);
+        if (z.fit) expect(tableWidth(z, days)).toBeLessThanOrEqual(pane);
+      }
+    }
+  });
+
+  it("scrolls on narrow panes (small windows, tablets)", () => {
+    expect(computeLayout(672, 15, false)).toEqual({ ...SCROLL_SIZES, fit: false });
+  });
+
+  it("uses phone sizes on phones regardless of width", () => {
+    expect(computeLayout(1200, 15, true)).toEqual({ ...COMPACT_SIZES, fit: false });
+  });
+
+  it("scrolls until the pane has been measured", () => {
+    expect(computeLayout(0, 15, false).fit).toBe(false);
+  });
+
+  it("uses larger type on wider screens", () => {
+    const small = computeLayout(928, 15, false);
+    const large = computeLayout(1568, 15, false);
+    expect(large.cellH).toBeGreaterThan(small.cellH);
+    expect(large.empW).toBeGreaterThan(small.empW);
+  });
+});

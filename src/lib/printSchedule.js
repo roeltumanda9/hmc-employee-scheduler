@@ -1,5 +1,6 @@
 import { MONTHS, periodTitle } from "./dates";
-import { findDepartment, resolveShift } from "./settings";
+import { findDepartment, leaveChecker, resolveShift } from "./settings";
+import { isWorking, tallyDays } from "./statuses";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => {
@@ -72,22 +73,20 @@ export function printSchedule({
 
   let grandPresent = 0;
   let grandOff = 0;
-  let grandIL = 0;
+  let grandLeave = 0;
+  const isLeave = leaveChecker(settings);
   let grandTotalDays = 0;
 
   const rows = visibleEmployees
     .map((emp, i) => {
-      let present = 0;
-      let off = 0;
-      let il = 0;
+      const { present, off, leave } = tallyDays(
+        days.map((d) => lookup[`${emp.id}|${d.iso}`]),
+        isLeave,
+      );
 
       const cells = days
         .map((d) => {
           const st = lookup[`${emp.id}|${d.iso}`];
-
-          if (st === "IL") il++;
-          else if (st && st !== "OFF") present++;
-          else if (st === "OFF") off++;
 
           let cls = "cell";
           if (st && shiftClass.has(st)) cls += ` ${shiftClass.get(st)}`;
@@ -99,7 +98,7 @@ export function printSchedule({
       const total = present;
       grandPresent += present;
       grandOff += off;
-      grandIL += il;
+      grandLeave += leave;
       grandTotalDays += total;
 
       return `
@@ -110,7 +109,7 @@ export function printSchedule({
 <div class="role">${escapeHtml(emp.role)}</div>
 </td>
           ${cells}
-          <td class="cell sum il">${il || ""}</td>
+          <td class="cell sum il">${leave || ""}</td>
           <td class="cell sum present">${present || ""}</td>
           <td class="cell sum off">${off || ""}</td>
           <td class="cell sum total">${total || ""}</td>
@@ -123,7 +122,7 @@ export function printSchedule({
       let count = 0;
       for (const emp of visibleEmployees) {
         const st = lookup[`${emp.id}|${d.iso}`];
-        if (st && st !== "OFF" && st !== "IL") count++;
+        if (isWorking(st, isLeave)) count++;
       }
       return `<td class="cell total">${count}</td>`;
     })
@@ -148,11 +147,14 @@ export function printSchedule({
     if (s.status) usedCodes.add(s.status);
   }
 
+  // A department's own shifts and OFF, plus whichever leave types were used
+  // this period (every department can use every leave type).
   const legendCodes = isAllDepts
     ? Array.from(usedCodes)
     : (() => {
-        const codes = deptConfig?.shifts || [];
-        return Array.from(new Set([...codes, "OFF"]));
+        const codes = (deptConfig?.shifts || []).filter((c) => !isLeave(c));
+        const usedLeave = Array.from(usedCodes).filter((c) => isLeave(c));
+        return Array.from(new Set([...codes, "OFF", ...usedLeave]));
       })();
 
   const legendItems = legendCodes
@@ -445,7 +447,7 @@ ${escapeHtml(s.label)}${s.time ? ` — ${escapeHtml(s.time)}` : ""}
         <th class="num-h">#</th>
         <th class="name-h">NAME</th>
         ${dayHeaders}
-        <th class="sum-h il-h">INCENTIVE<br>LEAVE</th>
+        <th class="sum-h il-h">LEAVE</th>
         <th class="sum-h present-h">PHYSICAL<br>PRESENT</th>
         <th class="sum-h off-h">PHYSICAL<br>OFF</th>
         <th class="sum-h total-h">TOTAL<br>WORKING<br>DAYS</th>
@@ -459,7 +461,7 @@ ${escapeHtml(s.label)}${s.time ? ` — ${escapeHtml(s.time)}` : ""}
         <td class="num"></td>
         <td class="name">TOTAL MANPOWER OF THE DAY</td>
         ${dailyTotals}
-        <td class="sum il">${grandIL}</td>
+        <td class="sum il">${grandLeave}</td>
         <td class="sum present">${grandPresent}</td>
         <td class="sum off">${grandOff}</td>
         <td class="sum total">${grandTotalDays}</td>

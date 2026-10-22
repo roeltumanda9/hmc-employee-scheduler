@@ -34,8 +34,19 @@ const FALLBACK_COLOR = "gray";
 // type was added here) still shows, just without a color.
 const UNKNOWN_CLASSES = "bg-white text-slate-600 ring-1 ring-inset ring-slate-300";
 
-/** Normalized shift: { code, label, time, color, classes, print, sortOrder }. */
-export function makeShift({ code, label, time, color, sort_order }) {
+
+// Leave types (supabase/proposed_leave_types.sql). Used to recognise leave
+// when the database doesn't say: before that SQL runs (no `is_leave` column)
+// and for the built-in list below.
+export const DEFAULT_LEAVE_CODES = ["SL", "ML", "PL", "IL", "UL", "OL"];
+
+const isDefaultLeave = (code) => DEFAULT_LEAVE_CODES.includes(code);
+
+/**
+ * Normalized shift: { code, label, time, color, classes, print, sortOrder,
+ * isLeave }. `is_leave` comes from the shift_types table.
+ */
+export function makeShift({ code, label, time, color, sort_order, is_leave }) {
   const key = SHIFT_COLORS[color] ? color : FALLBACK_COLOR;
   return {
     code,
@@ -45,6 +56,7 @@ export function makeShift({ code, label, time, color, sort_order }) {
     classes: SHIFT_COLORS[key].classes,
     print: SHIFT_COLORS[key].print,
     sortOrder: sort_order ?? 0,
+    isLeave: is_leave ?? isDefaultLeave(code),
   };
 }
 
@@ -56,12 +68,14 @@ export function unknownShift(code) {
     color: FALLBACK_COLOR,
     classes: UNKNOWN_CLASSES,
     print: SHIFT_COLORS[FALLBACK_COLOR].print,
+    isLeave: false,
   };
 }
 
-// OFF and IL drive the day totals (present / off / incentive leave), so they
-// can't be deleted.
-export const PROTECTED_SHIFTS = ["OFF", "IL"];
+// OFF drives the "Off" total, so it can't be deleted. Leave types (IL
+// included) are ordinary: one still used in saved schedules is protected by
+// the delete check in supabase/proposed_shift_types.sql.
+export const PROTECTED_SHIFTS = ["OFF"];
 
 // Codes: 1–6 characters, capital letters, digits or "-" (not first).
 // Matches the check constraint in supabase/proposed_shift_types.sql.
@@ -81,9 +95,40 @@ export const STATUSES = [
   { code: "LS", label: "Late Shift", time: "11:00 AM – 8:00 PM", color: "violet" },
   { code: "ES", label: "Extended Shift", time: "8:00 AM – 8:00 PM", color: "fuchsia" },
   { code: "OFF", label: "Day Off", time: "", color: "gray" },
-  { code: "IL", label: "Incentive Leave", time: "", color: "mint" },
   { code: "C3", label: "C3", time: "", color: "teal" },
+  { code: "SL", label: "Sick Leave", time: "", color: "red" },
+  { code: "ML", label: "Maternity Leave", time: "", color: "pink" },
+  { code: "PL", label: "Paternity Leave", time: "", color: "purple" },
+  { code: "IL", label: "Incentive Leave", time: "", color: "mint" },
+  { code: "UL", label: "Unpaid Leave", time: "", color: "stone" },
+  { code: "OL", label: "Other Leave", time: "", color: "yellow" },
 ].map(makeShift);
 
 // Which shifts each department may use, and its time overrides, are settings:
 // see src/lib/settings.js (`shiftsForDepartment`, `resolveShift`).
+
+/**
+ * Whether a shift counts as physically present (daily manpower): any shift
+ * except OFF and leave. Pass `isLeave` from settings (`leaveChecker`).
+ */
+export function isWorking(code, isLeave = isDefaultLeave) {
+  return !!code && code !== "OFF" && !isLeave(code);
+}
+
+/**
+ * Day totals for a list of shift codes (empty days are ignored), as used by
+ * the grid and the printed sheet: present (total working days), off, leave
+ * (every leave type). Pass `isLeave` from settings (`leaveChecker`).
+ */
+export function tallyDays(codes, isLeave = isDefaultLeave) {
+  let present = 0;
+  let off = 0;
+  let leave = 0;
+  for (const code of codes) {
+    if (!code) continue;
+    if (code === "OFF") off++;
+    else if (isLeave(code)) leave++;
+    else present++;
+  }
+  return { present, off, leave };
+}

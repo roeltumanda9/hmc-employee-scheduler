@@ -88,7 +88,27 @@ export default function SettingsPage({ role, onSaved }) {
         ))}
       </datalist>
 
-      <section className="space-y-3">
+      {/* Jump links: the page is long (signatures, shifts, departments). */}
+      <nav aria-label="Settings sections" className="flex gap-2 overflow-x-auto scroll-none -mx-4 px-4 sm:mx-0 sm:px-0">
+        {[
+          ["settings-print", "Print signatures"],
+          ["settings-shifts", "Shifts"],
+          ["settings-departments", "Departments"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() =>
+              document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+            className={`${BTN.secondary} h-9 px-3.5 text-xs shrink-0`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      <section id="settings-print" className="space-y-3 scroll-mt-24">
         <SectionHeading
           title="Print signatures"
           description="Shown at the bottom of every printed schedule. The “Prepared by” here is used for “All departments” and for departments without their own."
@@ -102,7 +122,7 @@ export default function SettingsPage({ role, onSaved }) {
 
       <ShiftTypesSection onSaved={onSaved} />
 
-      <section className="space-y-3">
+      <section id="settings-departments" className="space-y-3 scroll-mt-24">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <SectionHeading
             title="Departments"
@@ -306,7 +326,7 @@ function ShiftTypesSection({ onSaved }) {
   const ready = settings.shiftsSource === "database";
 
   return (
-    <section className="space-y-3">
+    <section id="settings-shifts" className="space-y-3 scroll-mt-24">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <SectionHeading
           title="Shifts"
@@ -419,6 +439,11 @@ function ShiftTypeRow({ shift, editable, onSaved }) {
         <span className="flex-1 min-w-0">
           <span className="flex items-center gap-2">
             <span className="text-sm font-semibold text-slate-900 truncate">{shift.label}</span>
+            {shift.isLeave && (
+              <span className="shrink-0 text-[0.625rem] uppercase tracking-wider font-semibold text-emerald-800 bg-emerald-50 ring-1 ring-inset ring-emerald-600/15 rounded-full px-2 py-0.5">
+                Leave
+              </span>
+            )}
             {isProtected && (
               <span className="shrink-0 text-[0.625rem] uppercase tracking-wider font-semibold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
                 Required
@@ -483,6 +508,7 @@ function ShiftTypeForm({ shift, isNew = false, onCancel, onSaved }) {
     label: shift?.label || "",
     time: shift?.time || "",
     color: shift?.color || "sky",
+    isLeave: shift?.isLeave || false,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -493,7 +519,8 @@ function ShiftTypeForm({ shift, isNew = false, onCancel, onSaved }) {
     isNew ||
     form.label.trim() !== shift.label ||
     form.time.trim() !== shift.time ||
-    form.color !== shift.color;
+    form.color !== shift.color ||
+    form.isLeave !== shift.isLeave;
   const preview = SHIFT_COLORS[form.color] || SHIFT_COLORS.gray;
 
   function update(field, value) {
@@ -516,16 +543,18 @@ function ShiftTypeForm({ shift, isNew = false, onCancel, onSaved }) {
 
     setSaving(true);
     setError("");
+    // `is_leave` exists only after supabase/proposed_leave_types.sql.
+    const leaveField = settings.leaveColumn ? { is_leave: form.isLeave } : {};
     const nextOrder =
       Math.max(0, ...settings.shifts.map((s) => s.sortOrder || 0)) + 1;
     const { data, error } = isNew
       ? await supabase
           .from("shift_types")
-          .insert({ code, label, default_time: time || null, color: form.color, sort_order: nextOrder })
+          .insert({ code, label, default_time: time || null, color: form.color, sort_order: nextOrder, ...leaveField })
           .select()
       : await supabase
           .from("shift_types")
-          .update({ label, default_time: time || null, color: form.color })
+          .update({ label, default_time: time || null, color: form.color, ...leaveField })
           .eq("code", shift.code)
           .select();
     setSaving(false);
@@ -585,6 +614,25 @@ function ShiftTypeForm({ shift, isNew = false, onCancel, onSaved }) {
             />
           </Field>
         </div>
+
+        {settings.leaveColumn && (
+          <label className="flex items-start gap-3 cursor-pointer rounded-xl bg-slate-50/80 ring-1 ring-inset ring-slate-900/[0.05] p-3.5 hover:bg-slate-50 transition-colors">
+            <input
+              type="checkbox"
+              checked={form.isLeave}
+              onChange={(e) => update("isLeave", e.target.checked)}
+              disabled={code === "OFF"}
+              className="mt-0.5 w-[1.125rem] h-[1.125rem] accent-green-600 shrink-0"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-slate-900">This is a leave type</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Leave appears under “Leave” in the Scheduler for every department, counts in the Leave total
+                (not as a working day) and shows on each employee’s leave summary.
+              </span>
+            </span>
+          </label>
+        )}
 
         <div>
           <div className="flex items-center justify-between gap-3 mb-2">
@@ -800,7 +848,7 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
               )}
             </span>
             <span className="mt-1.5 flex flex-wrap gap-1">
-              {department.shifts.map((code) => (
+              {department.shifts.filter((code) => !findShift(settings, code)?.isLeave).map((code) => (
                 <span
                   key={code}
                   className={`text-[0.625rem] font-bold rounded-md px-1.5 py-0.5 ${findShift(settings, code)?.classes || "bg-slate-100 text-slate-600"}`}
@@ -936,7 +984,7 @@ function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
       <legend className="text-xs font-semibold text-slate-700 mb-3">Shifts this department can use</legend>
 
       <div className="flex flex-wrap gap-1.5">
-        {settings.shifts.map((s) => {
+        {settings.shifts.filter((s) => !s.isLeave).map((s) => {
           const on = shifts.includes(s.code);
           return (
             <button
@@ -961,7 +1009,7 @@ function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
         <ul className="divide-y divide-slate-100 rounded-xl ring-1 ring-inset ring-slate-900/[0.07] overflow-hidden">
           {shifts.map((code, i) => {
             const s = findShift(settings, code);
-            if (!s) return null;
+            if (!s || s.isLeave) return null;
             return (
               <li key={code} className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 px-3 py-2.5 bg-white">
                 <span className="w-6 text-right text-xs font-medium text-slate-400 tabular-nums" aria-hidden="true">
@@ -992,7 +1040,7 @@ function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
         </ul>
       )}
       <p className="text-xs text-slate-500 leading-relaxed">
-        Leave a time empty to use the shift's standard time (shown in grey). The order here is the order in the shift picker.
+        Leave a time empty to use the shift's standard time (shown in grey). The order here is the order in the shift picker. Leave types (Sick, Incentive, …) aren't listed: every department can use them, under “Leave”.
       </p>
     </fieldset>
   );

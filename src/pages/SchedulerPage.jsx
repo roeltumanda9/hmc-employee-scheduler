@@ -1,16 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { MONTHS, getPayrollPeriodDays, periodTitle } from "../lib/dates";
-import { printSchedule } from "../lib/printSchedule";
+import {
+  MONTHS,
+  getPayrollPeriodDays,
+  periodTitle,
+  previousPeriod,
+  sameWeekdayIn,
+} from "../lib/dates";
 import {
   departmentNames,
   findDepartment,
   findShift,
-  resolveShift,
+  leaveChecker,
+  leaveTypes,
+  shiftsForDepartment,
   useSettings,
 } from "../lib/settings";
 import { canEditSchedules } from "../lib/auth";
 import { friendlyError } from "../lib/errors";
+import { countLeave, leaveStatusFor } from "../lib/leave";
 import { handleMenuKeyDown } from "../lib/useDialog";
 import ScheduleGrid from "../components/ScheduleGrid";
 import ConfirmModal from "../components/ConfirmModal";
@@ -44,6 +52,25 @@ async function fetchSchedules(firstIso, lastIso, employeeIds) {
       .range(from, from + PAGE_SIZE - 1);
     if (employeeIds) q = q.in("employee_id", employeeIds);
     const { data, error } = await q;
+    if (error) return { data: null, error };
+    rows.push(...data);
+    if (data.length < PAGE_SIZE) return { data: rows, error: null };
+  }
+}
+
+// Leave rows (status in `codes`) for these employees between two dates.
+async function fetchLeaveRows(fromIso, toIso, employeeIds, codes) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("schedules")
+      .select("employee_id, date, status")
+      .gte("date", fromIso)
+      .lte("date", toIso)
+      .in("status", codes)
+      .in("employee_id", employeeIds)
+      .order("id")
+      .range(from, from + PAGE_SIZE - 1);
     if (error) return { data: null, error };
     rows.push(...data);
     if (data.length < PAGE_SIZE) return { data: rows, error: null };
@@ -149,8 +176,9 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  // Number of changes in the last successful save; shows the "saved" toast.
-  const [savedCount, setSavedCount] = useState(0);
+  // Short confirmation shown at the bottom ({ id, title, detail, tone }).
+  const [toast, setToast] = useState(null);
+  const [copying, setCopying] = useState(false);
   const [editSnapshot, setEditSnapshot] = useState(null);
   const [pending, setPending] = useState({});
   const [error, setError] = useState("");
@@ -215,18 +243,27 @@ export default function SchedulerPage({ role, onDirtyChange }) {
 
   const legendShifts = useMemo(() => {
     if (isAllDepts) return [];
-    const codes = findDepartment(settings, dept)?.shifts || [];
-    const resolved = codes
-      .map((code) => resolveShift(settings, code, dept))
-      .filter(Boolean);
+    const resolved = shiftsForDepartment(settings, dept);
 
     const hasOff = resolved.some((s) => s.code === "OFF");
     const off = findShift(settings, "OFF");
     if (!hasOff && off) {
       resolved.push(off);
     }
+
+    // Every department can use every leave type, so list only the ones used
+    // by this department in this period instead of all of them.
+    const ids = new Set(
+      employees.filter((e) => e.department === dept).map((e) => e.id),
+    );
+    const used = new Set(
+      schedules.filter((s) => ids.has(s.employee_id)).map((s) => s.status),
+    );
+    for (const leave of leaveTypes(settings)) {
+      if (used.has(leave.code)) resolved.push(leave);
+    }
     return resolved;
-  }, [dept, isAllDepts, settings]);
+  }, [dept, isAllDepts, settings, employees, schedules]);
 
   // A department remembered from a previous visit may have been renamed or
   // removed on the Settings page since; fall back to "All departments".
@@ -245,6 +282,51 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   const lastIso = days[days.length - 1]?.iso;
   const pendingCount = Object.keys(pending).length;
   const dirty = editing && pendingCount > 0;
+
+  // ---- Yearly leave limit (MAX_LEAVE_DAYS_PER_YEAR, all leave types) ----
+  // While editing: saved leave for the year(s) this period touches, so the
+  // picker can block leave beyond the limit. The database enforces it too.
+  const [savedLeave, setSavedLeave] = useState([]);
+  const isLeave = leaveChecker(settings);
+  const leaveCodesKey = leaveTypes(settings).map((l) => l.code).join(",");
+  const visibleIdsKey = visibleEmployees.map((e) => e.id).join(",");
+
+  useEffect(() => {
+    if (!editing || !leaveCodesKey || !visibleIdsKey || !firstIso) {
+      setSavedLeave([]);
+      return;
+    }
+    let active = true;
+    fetchLeaveRows(
+      `${firstIso.slice(0, 4)}-01-01`,
+      `${lastIso.slice(0, 4)}-12-31`,
+      visibleIdsKey.split(","),
+      leaveCodesKey.split(","),
+    ).then(({ data, error }) => {
+      if (!active) return;
+      if (error) setError(friendlyError(error, "check the leave days used this year"));
+      else setSavedLeave(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [editing, firstIso, lastIso, visibleIdsKey, leaveCodesKey]);
+
+  const leaveCounts = useMemo(
+    () =>
+      countLeave({
+        saved: savedLeave,
+        current: schedules,
+        periodIsos: days.map((d) => d.iso),
+        isLeave,
+      }),
+    // `isLeave` is derived from settings.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [savedLeave, schedules, days, settings],
+  );
+
+  const leaveStatus = (employeeId, iso, cellIsLeave) =>
+    leaveStatusFor(leaveCounts, employeeId, iso, cellIsLeave);
 
   async function load() {
     const seq = ++loadSeq.current;
@@ -280,10 +362,10 @@ export default function SchedulerPage({ role, onDirtyChange }) {
 
   // Hide the "saved" toast after a few seconds.
   useEffect(() => {
-    if (!savedCount) return;
-    const t = setTimeout(() => setSavedCount(0), 3500);
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(t);
-  }, [savedCount]);
+  }, [toast]);
 
   // Warn before closing or reloading the tab with unsaved edits.
   useEffect(() => {
@@ -378,6 +460,103 @@ export default function SchedulerPage({ role, onDirtyChange }) {
     );
   }
 
+  function showToast(title, detail, tone = "success") {
+    setToast({ id: Date.now(), title, detail, tone });
+  }
+
+  // The values a copy started with; checked after the fetch so a copy that
+  // finishes after the user navigated or cancelled is dropped.
+  const latest = useRef(null);
+  latest.current = { firstIso, dept, editing };
+
+  // Fill this period's empty days from the previous period, matching
+  // weekdays (see sameWeekdayIn). Never overwrites a shift and never touches
+  // a cell already changed in this edit session. Result is a pending draft.
+  async function copyPreviousPeriod() {
+    if (isAllDepts || !canEdit || !editing || copying) return;
+    const start = { firstIso, dept };
+    setCopying(true);
+    setError("");
+
+    const prev = previousPeriod(year, month, half);
+    const prevDays = getPayrollPeriodDays(prev.year, prev.month, prev.half);
+    const empIds = visibleEmployees.map((e) => e.id);
+    const { data, error } = await fetchSchedules(
+      prevDays[0].iso,
+      prevDays[prevDays.length - 1].iso,
+      empIds,
+    );
+    setCopying(false);
+
+    const now = latest.current;
+    if (!now.editing || now.firstIso !== start.firstIso || now.dept !== start.dept) return;
+    if (error) {
+      setError(friendlyError(error, "copy the previous period"));
+      return;
+    }
+
+    const source = {};
+    for (const r of data) if (r.status) source[`${r.employee_id}|${r.date}`] = r.status;
+    const taken = new Set(
+      schedules.filter((s) => s.status).map((s) => `${s.employee_id}|${s.date}`),
+    );
+
+    const fills = [];
+    // Copied leave counts toward the yearly limit too; skip what won't fit.
+    const counts = { ...leaveCounts };
+    let leaveSkipped = 0;
+    for (const empId of empIds) {
+      for (const d of days) {
+        const key = `${empId}|${d.iso}`;
+        if (taken.has(key) || key in pending) continue;
+        const from = sameWeekdayIn(d.iso, prevDays);
+        const status = from && source[`${empId}|${from}`];
+        if (!status) continue;
+        if (isLeave(status)) {
+          if (leaveStatusFor(counts, empId, d.iso, false).blocked) {
+            leaveSkipped++;
+            continue;
+          }
+          const ck = `${empId}|${d.iso.slice(0, 4)}`;
+          counts[ck] = (counts[ck] || 0) + 1;
+        }
+        fills.push({ key, empId, iso: d.iso, status });
+      }
+    }
+    const skippedNote = leaveSkipped
+      ? ` · ${leaveSkipped} leave ${leaveSkipped === 1 ? "day" : "days"} skipped (yearly limit)`
+      : "";
+
+    if (fills.length === 0) {
+      showToast(
+        "Nothing to copy",
+        `no empty day had a shift in the previous period${skippedNote}`,
+        "info",
+      );
+      return;
+    }
+
+    setPending((p) => {
+      const next = { ...p };
+      for (const f of fills) next[f.key] = f.status;
+      return next;
+    });
+    setSchedules((rows) => [
+      ...rows,
+      ...fills.map((f) => ({
+        id: `pending-${f.key}`,
+        employee_id: f.empId,
+        date: f.iso,
+        status: f.status,
+        _pending: true,
+      })),
+    ]);
+    showToast(
+      "Copied from the previous period",
+      `${fills.length} ${fills.length === 1 ? "shift" : "shifts"} added — review, then Save${skippedNote}`,
+    );
+  }
+
   function cancelEdit() {
     if (editSnapshot) setSchedules(editSnapshot);
     setPending({});
@@ -448,7 +627,10 @@ export default function SchedulerPage({ role, onDirtyChange }) {
     setEditing(false);
     await load();
     setSaving(false);
-    setSavedCount(changes.length);
+    showToast(
+      "Schedule saved",
+      `${changes.length} ${changes.length === 1 ? "change" : "changes"}`,
+    );
   }
 
   function changeMonth(delta) {
@@ -477,7 +659,15 @@ export default function SchedulerPage({ role, onDirtyChange }) {
     return current < NEXT.year * 100 + NEXT.month;
   }
 
-  function handlePrint() {
+  // The print builder loads on first use; most visits never print.
+  async function handlePrint() {
+    let printSchedule;
+    try {
+      ({ printSchedule } = await import("../lib/printSchedule"));
+    } catch (err) {
+      setError(friendlyError(err, "open the print view"));
+      return;
+    }
     printSchedule({
       dept,
       isAllDepts,
@@ -499,7 +689,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
       {/* Pinned only on large screens, just below the app header (z-30).
           On phones and tablets it scrolls away so the grid gets the screen.
           z-40 keeps its department menu above the grid's sticky header (z-30). */}
-      <div className="lg:sticky lg:top-[4.5rem] lg:z-40 lg:-mx-6 lg:px-6 lg:py-2 lg:bg-[#f6f8f7]/85 lg:backdrop-blur-md">
+      <div className="lg:sticky lg:top-14 lg:z-40 lg:-mx-6 lg:px-6 lg:py-2 lg:bg-[#f6f8f7]/85 lg:backdrop-blur-md">
         <div className={`${CARD} p-2.5 sm:p-3 lg:p-2.5 flex flex-col gap-2.5 lg:flex-row lg:flex-wrap lg:items-center lg:gap-2`}>
           {/* MONTH */}
           <div className="flex items-center gap-1.5 sm:gap-2">
@@ -660,8 +850,9 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                         <>
                           <Icon name="check" size={16} strokeWidth={3} />
                           Save
+                          {/* Laptops: the count is in the editing banner; keeps one toolbar row. */}
                           {pendingCount > 0 && (
-                            <span className="min-w-5 h-5 px-1.5 rounded-full bg-white/20 text-xs font-bold tabular-nums grid place-items-center">
+                            <span className="min-w-5 h-5 px-1.5 rounded-full bg-white/20 text-xs font-bold tabular-nums grid place-items-center lg:hidden 2xl:grid">
                               {pendingCount}
                             </span>
                           )}
@@ -677,14 +868,14 @@ export default function SchedulerPage({ role, onDirtyChange }) {
       </div>
 
       {editing && (
-        <div className="flex items-center gap-3 rounded-2xl bg-amber-50 ring-1 ring-inset ring-amber-200/80 px-3 sm:px-4 py-2.5 text-xs sm:text-sm text-amber-900 animate-fade-in">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-amber-50 ring-1 ring-inset ring-amber-200/80 px-3 sm:px-4 py-2.5 text-xs sm:text-sm text-amber-900 animate-fade-in">
           <span
             className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 grid place-items-center shrink-0"
             aria-hidden="true"
           >
             <Icon name="pencil" size={14} strokeWidth={2.5} />
           </span>
-          <span className="flex-1 min-w-0">
+          <span className="flex-1 min-w-[12rem]">
             <strong className="font-semibold">Editing mode</strong> — changes aren't saved until you click{" "}
             <strong className="font-semibold">Save</strong>.
             {pendingCount > 0 && (
@@ -693,34 +884,60 @@ export default function SchedulerPage({ role, onDirtyChange }) {
               </span>
             )}
           </span>
-          <button
-            onClick={cancelEdit}
-            className="shrink-0 text-xs font-semibold text-amber-900 underline underline-offset-2 hover:no-underline"
-          >
-            Discard
-          </button>
+          <span className="flex items-center gap-3 ml-auto">
+            {/* Lives here (not the toolbar): it's an edit-mode action, and this
+                keeps the laptop toolbar on one row. */}
+            <button
+              onClick={copyPreviousPeriod}
+              disabled={copying || saving || visibleEmployees.length === 0}
+              className={`${BTN.secondary} h-9 px-3 text-xs`}
+              title="Fill empty days with the same weekday's shift from the last period. Shifts you've already entered are kept."
+            >
+              {copying ? (
+                <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-slate-200 border-t-green-600 animate-spin" />
+              ) : (
+                <Icon name="copy" size={14} />
+              )}
+              Copy previous period
+            </button>
+            <button
+              onClick={cancelEdit}
+              className="shrink-0 text-xs font-semibold text-amber-900 underline underline-offset-2 hover:no-underline"
+            >
+              Discard
+            </button>
+          </span>
         </div>
       )}
 
       <ErrorBanner message={error} onDismiss={() => setError("")} />
 
-      {/* "Saved" toast. The live region stays mounted so screen readers
-          announce the message when it appears. */}
+      {/* Toast ("Schedule saved", copy results). The live region stays
+          mounted so screen readers announce the message when it appears.
+          Sits above the phone save bar while editing. */}
       <div
         role="status"
         aria-live="polite"
-        className="fixed inset-x-0 bottom-4 sm:bottom-6 z-50 flex justify-center px-4 pointer-events-none"
+        className={`fixed inset-x-0 ${editing ? "bottom-24" : "bottom-4"} sm:bottom-6 z-50 flex justify-center px-4 pointer-events-none`}
       >
-        {savedCount > 0 && (
-          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl bg-slate-900 text-white pl-3 pr-4 py-3 shadow-overlay animate-pop-in">
-            <span className="w-7 h-7 rounded-full bg-green-500 text-white grid place-items-center shrink-0" aria-hidden="true">
-              <Icon name="check" size={15} strokeWidth={3} />
+        {toast && (
+          <div
+            key={toast.id}
+            className="pointer-events-auto flex items-center gap-3 rounded-2xl bg-slate-900 text-white pl-3 pr-4 py-3 shadow-overlay animate-pop-in max-w-md"
+          >
+            <span
+              className={`w-7 h-7 rounded-full text-white grid place-items-center shrink-0 ${
+                toast.tone === "info" ? "bg-slate-600" : "bg-green-500"
+              }`}
+              aria-hidden="true"
+            >
+              <Icon name={toast.tone === "info" ? "alertCircle" : "check"} size={15} strokeWidth={3} />
             </span>
             <span className="text-sm">
-              <span className="font-semibold">Schedule saved</span>
-              <span className="text-slate-300">
-                {" "}· {savedCount} {savedCount === 1 ? "change" : "changes"}
-              </span>
+              <span className="font-semibold">{toast.title}</span>
+              {toast.detail && (
+                <span className="text-slate-300"> · {toast.detail}</span>
+              )}
             </span>
           </div>
         )}
@@ -785,7 +1002,9 @@ export default function SchedulerPage({ role, onDirtyChange }) {
           days={days}
           schedules={schedules}
           onSetStatus={setStatus}
+          pending={editing ? pending : null}
           readOnly={isAllDepts || !canEdit || !editing}
+          leaveStatus={editing ? leaveStatus : null}
         />
       )}
 

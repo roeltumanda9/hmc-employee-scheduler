@@ -75,6 +75,12 @@ const PATHS = {
       <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
     </>
   ),
+  copy: (
+    <>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>
+  ),
   printer: (
     <>
       <polyline points="6 9 6 2 18 2 18 9" />

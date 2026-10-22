@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { departmentNames, useSettings } from "../lib/settings";
+import { departmentNames, leaveTypes, useSettings } from "../lib/settings";
 import EmployeeForm from "../components/EmployeeForm";
 import ConfirmModal from "../components/ConfirmModal";
 import ErrorBanner from "../components/ErrorBanner";
 import { canManageEmployees } from "../lib/auth";
 import { friendlyError } from "../lib/errors";
 import { buildFullName } from "../lib/format";
+import { MAX_LEAVE_DAYS_PER_YEAR } from "../lib/leave";
 import { handleMenuKeyDown } from "../lib/useDialog";
 import Icon from "../components/Icon";
 import {
@@ -27,6 +28,47 @@ function displayName(e) {
   const l = (e.last_name || "").trim();
   if (f || l) return buildFullName(e);
   return (e.name || "").toUpperCase();
+}
+
+const SHORT_MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+// Leave days of the given codes in `year`. Supabase returns at most 1000 rows
+// per request, so page through.
+async function fetchLeaveDays(codes, year) {
+  const PAGE = 1000;
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("schedules")
+      .select("employee_id, date, status")
+      .in("status", codes)
+      .gte("date", `${year}-01-01`)
+      .lte("date", `${year}-12-31`)
+      .order("date")
+      .range(from, from + PAGE - 1);
+    if (error) return { data: null, error };
+    rows.push(...data);
+    if (data.length < PAGE) return { data: rows, error: null };
+  }
+}
+
+// rows → { [employeeId]: { [code]: [iso, ...] } }
+function groupLeave(rows) {
+  const out = {};
+  for (const r of rows) {
+    const byCode = (out[r.employee_id] ||= {});
+    (byCode[r.status] ||= []).push(r.date);
+  }
+  return out;
+}
+
+// "2026-10-03" → "Oct 3"
+function shortDate(iso) {
+  const [, m, d] = iso.split("-").map(Number);
+  return `${SHORT_MONTHS[m - 1]} ${d}`;
 }
 
 export default function EmployeesPage({ role }) {
@@ -66,6 +108,26 @@ export default function EmployeesPage({ role }) {
   useEffect(() => {
     loadEmployees();
   }, []);
+
+  // This year's leave days per employee, from the saved schedules:
+  // { [employeeId]: { [leaveCode]: [iso, ...] } }.
+  const leaveYear = new Date().getFullYear();
+  const leaveKinds = leaveTypes(settings);
+  const leaveKey = leaveKinds.map((l) => l.code).join(",");
+  const [leaveByEmployee, setLeaveByEmployee] = useState({});
+
+  useEffect(() => {
+    if (!leaveKey) return;
+    let active = true;
+    fetchLeaveDays(leaveKey.split(","), leaveYear).then(({ data, error }) => {
+      if (!active) return;
+      if (error) setError(friendlyError(error, "load the leave totals"));
+      else setLeaveByEmployee(groupLeave(data));
+    });
+    return () => {
+      active = false;
+    };
+  }, [leaveKey, leaveYear]);
 
   async function handleDelete(id) {
     if (!canManage || !id) return;
@@ -131,6 +193,25 @@ export default function EmployeesPage({ role }) {
     for (const e of employees) c[e.department] = (c[e.department] || 0) + 1;
     return c;
   }, [employees, settings]);
+
+  // First employee of each department in the list → that department's header
+  // row. Only in "All departments": a filtered list is a single department.
+  const groupHeads = useMemo(() => {
+    const heads = {};
+    if (deptFilter !== "all") return heads;
+    const sizes = {};
+    for (const e of filtered) {
+      const d = e.department || "";
+      sizes[d] = (sizes[d] || 0) + 1;
+    }
+    let prev;
+    for (const e of filtered) {
+      const d = e.department || "";
+      if (d !== prev) heads[e.id] = { name: d || "No department", count: sizes[d] };
+      prev = d;
+    }
+    return heads;
+  }, [filtered, deptFilter]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -213,6 +294,7 @@ export default function EmployeesPage({ role }) {
                 <th className="px-6 py-3 font-semibold">Employee</th>
                 <th className="px-6 py-3 font-semibold">Department</th>
                 <th className="px-6 py-3 font-semibold">Role</th>
+                <th className="px-6 py-3 font-semibold">Leave in {leaveYear}</th>
                 {canManage && (
                   <th className="px-6 py-3 font-semibold text-right">
                     Actions
@@ -223,7 +305,7 @@ export default function EmployeesPage({ role }) {
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={canManage ? 5 : 4} className="p-0">
+                  <td colSpan={canManage ? 6 : 5} className="p-0">
                     <ListSkeleton />
                   </td>
                 </tr>
@@ -232,7 +314,7 @@ export default function EmployeesPage({ role }) {
               {!loading && filtered.length === 0 && (
                 <tr>
                   <td
-                    colSpan={canManage ? 5 : 4}
+                    colSpan={canManage ? 6 : 5}
                     className="px-6 py-14 text-center"
                   >
                     <EmptyState employees={employees} />
@@ -243,11 +325,21 @@ export default function EmployeesPage({ role }) {
               {!loading &&
                 filtered.map((e) => {
                   const full = displayName(e);
+                  const head = groupHeads[e.id];
                   return (
-                    <tr
-                      key={e.id}
-                      className="group hover:bg-slate-50/80 transition-colors"
-                    >
+                    <Fragment key={e.id}>
+                    {head && (
+                      <tr className="bg-slate-50/70">
+                        <th
+                          scope="colgroup"
+                          colSpan={canManage ? 6 : 5}
+                          className="px-6 pt-4 pb-2 text-left"
+                        >
+                          <GroupHeading name={head.name} count={head.count} />
+                        </th>
+                      </tr>
+                    )}
+                    <tr className="group hover:bg-slate-50/80 transition-colors">
                       <td className="px-6 py-3">
                         <span className="inline-flex font-mono text-xs tabular-nums text-slate-600 bg-slate-100 rounded-md px-1.5 py-0.5">
                           {e.number || "—"}
@@ -268,6 +360,9 @@ export default function EmployeesPage({ role }) {
                       <td className="px-6 py-3 text-slate-600 uppercase text-[0.8125rem]">
                         {e.role}
                       </td>
+                      <td className="px-6 py-3">
+                        <LeaveSummary days={leaveByEmployee[e.id]} kinds={leaveKinds} />
+                      </td>
                       {canManage && (
                         <td className="px-6 py-3">
                           <RowActions
@@ -278,6 +373,7 @@ export default function EmployeesPage({ role }) {
                         </td>
                       )}
                     </tr>
+                    </Fragment>
                   );
                 })}
             </tbody>
@@ -297,8 +393,15 @@ export default function EmployeesPage({ role }) {
           {!loading &&
             filtered.map((e) => {
               const full = displayName(e);
+              const head = groupHeads[e.id];
               return (
-                <div key={e.id} className="px-4 py-3.5">
+                <Fragment key={e.id}>
+                {head && (
+                  <div className="px-4 pt-4 pb-2 bg-slate-50/70">
+                    <GroupHeading name={head.name} count={head.count} />
+                  </div>
+                )}
+                <div className="px-4 py-3.5">
                   <div className="min-w-0">
                     <div className="font-semibold text-slate-900 text-[0.9375rem] leading-snug uppercase break-words">
                       {full || "—"}
@@ -316,6 +419,14 @@ export default function EmployeesPage({ role }) {
                         {e.number ? `Emp. No. ${e.number}` : "No employee number"}
                       </span>
                     </div>
+                    {leaveKinds.length > 0 && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[0.6875rem] text-slate-500 font-medium">
+                          Leave in {leaveYear}:
+                        </span>
+                        <LeaveSummary days={leaveByEmployee[e.id]} kinds={leaveKinds} />
+                      </div>
+                    )}
                   </div>
 
                   {canManage && (
@@ -339,6 +450,7 @@ export default function EmployeesPage({ role }) {
                     </div>
                   )}
                 </div>
+                </Fragment>
               );
             })}
         </div>
@@ -366,6 +478,64 @@ export default function EmployeesPage({ role }) {
         onCancel={() => setConfirmId(null)}
       />
     </div>
+  );
+}
+
+/* ------------------ Leave summary (this year) ------------------ */
+// One chip per leave type used, e.g. [SL] 2 · [IL] 1; hover lists the dates.
+function LeaveSummary({ days, kinds }) {
+  const used = kinds.filter((k) => days?.[k.code]?.length);
+  const total = used.reduce((n, k) => n + days[k.code].length, 0);
+  const limit = MAX_LEAVE_DAYS_PER_YEAR;
+  // Used / yearly allowance (all leave types together).
+  const allowance = (
+    <span
+      title={`${total} of ${limit} leave days used this year (all leave types)`}
+      aria-label={`${total} of ${limit} leave days used`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[0.6875rem] font-bold tabular-nums ring-1 ring-inset ${
+        total > limit
+          ? "bg-rose-50 text-rose-700 ring-rose-200"
+          : total === limit
+            ? "bg-amber-50 text-amber-800 ring-amber-200"
+            : "bg-white text-slate-600 ring-slate-900/10"
+      }`}
+    >
+      {total}/{limit}
+    </span>
+  );
+  if (used.length === 0) return allowance;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      {allowance}
+      {used.map((k) => {
+        const dates = days[k.code];
+        return (
+          <span
+            key={k.code}
+            title={`${k.label}: ${dates.map(shortDate).join(", ")}`}
+            aria-label={`${k.label}: ${dates.length} ${dates.length === 1 ? "day" : "days"}`}
+            className="inline-flex items-center gap-1 rounded-md bg-white ring-1 ring-inset ring-slate-900/10 pr-1.5 text-[0.6875rem] font-semibold tabular-nums text-slate-700"
+          >
+            <span className={`rounded-l-md px-1.5 py-0.5 font-bold ${k.classes}`}>{k.code}</span>
+            {dates.length}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/* ------------------ Department group heading ------------------ */
+function GroupHeading({ name, count }) {
+  return (
+    <span className="flex items-center gap-2">
+      <span className="text-[0.6875rem] uppercase tracking-[0.08em] font-semibold text-slate-600">
+        {name}
+      </span>
+      <span className="text-[0.6875rem] font-semibold tabular-nums rounded-full bg-white ring-1 ring-inset ring-slate-900/10 text-slate-500 px-1.5 py-px">
+        {count}
+      </span>
+    </span>
   );
 }
 

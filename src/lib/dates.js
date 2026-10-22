@@ -65,3 +65,32 @@ export function periodTitle(days, month, year) {
   if (fy === ly) return `${MONTHS[fm - 1]} – ${MONTHS[lm - 1]} ${fy}`;
   return `${MONTHS[fm - 1]} ${fy} – ${MONTHS[lm - 1]} ${ly}`;
 }
+
+function toIso(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** The payroll period before (year, month, half), as { year, month, half }. */
+export function previousPeriod(year, month, half) {
+  if (half === 2) return { year, month, half: 1 };
+  return month === 1
+    ? { year: year - 1, month: 12, half: 2 }
+    : { year, month: month - 1, half: 2 };
+}
+
+/**
+ * For "copy previous period": the same weekday two weeks earlier; three weeks
+ * when two weeks back is still inside the current period (the last day or two
+ * of a 15–16 day period); one week when the previous period is short (the
+ * 13-day period after February). Returns the ISO date if it falls in
+ * `prevDays`, else null. Matching weekdays keeps weekly rest-day patterns.
+ */
+export function sameWeekdayIn(iso, prevDays) {
+  const inPrev = new Set(prevDays.map((d) => d.iso));
+  const [y, m, d] = iso.split("-").map(Number);
+  for (const back of [14, 21, 7]) {
+    const source = toIso(new Date(y, m - 1, d - back));
+    if (inPrev.has(source)) return source;
+  }
+  return null;
+}

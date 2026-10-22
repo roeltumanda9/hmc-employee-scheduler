@@ -1,3 +1,5 @@
+import { MAX_LEAVE_DAYS_PER_YEAR } from "./leave";
+
 /**
  * Turns a Supabase / network error into a plain-language sentence.
  * `action` completes "Couldn't …", e.g. "save the schedule".
@@ -21,6 +23,10 @@ export function friendlyError(error, action = "complete this action") {
   }
   if (code === "23505") {
     return `Couldn't ${action} because a record with the same details already exists.`;
+  }
+  // Raised by supabase/proposed_leave_limit.sql.
+  if (/leave limit/i.test(msg)) {
+    return `Couldn't ${action}: an employee would have more than ${MAX_LEAVE_DAYS_PER_YEAR} leave days in a year (all leave types together). Change some of that leave and try again.`;
   }
   if (code === "23503") {
     return `Couldn't ${action} because other records still depend on it.`;

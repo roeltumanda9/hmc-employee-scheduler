@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { canManageEmployees, getMyProfile, ROLE_LABELS } from "./lib/auth";
 import { DEFAULT_SETTINGS, SettingsContext, loadSettings } from "./lib/settings";
-import LoginPage from "./pages/LoginPage";
-import EmployeesPage from "./pages/EmployeesPage";
-import SchedulerPage from "./pages/SchedulerPage";
-import SettingsPage from "./pages/SettingsPage";
+// Pages load on first use, so the sign-in screen doesn't wait for them.
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const EmployeesPage = lazy(() => import("./pages/EmployeesPage"));
+const SchedulerPage = lazy(() => import("./pages/SchedulerPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 import { useAutoLogout } from "./lib/useAutoLogout";
 import IdleWarningModal from "./components/IdleWarningModal";
 import ConfirmModal from "./components/ConfirmModal";
@@ -206,7 +207,13 @@ export default function App() {
   if (authLoading) return <FullScreenLoader />;
 
   // --- Not signed in ---
-  if (!session) return <LoginPage />;
+  if (!session) {
+    return (
+      <Suspense fallback={<FullScreenLoader />}>
+        <LoginPage />
+      </Suspense>
+    );
+  }
 
   // --- Profile loading ---
   if (profileLoading) return <FullScreenLoader />;
@@ -372,7 +379,7 @@ export default function App() {
 
       {/* Main content */}
       <main className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-30 h-14 sm:h-16 lg:h-[4.5rem] bg-white/80 backdrop-blur-md border-b border-slate-900/[0.06] px-3 sm:px-4 md:px-6 flex items-center gap-2 sm:gap-3">
+        <header className="sticky top-0 z-30 h-14 sm:h-16 md:h-14 bg-white/80 backdrop-blur-md border-b border-slate-900/[0.06] px-3 sm:px-4 md:px-6 flex items-center gap-2 sm:gap-3">
           {/* Hamburger (mobile) */}
           <button
             onClick={() => setSidebarOpen(true)}
@@ -387,14 +394,14 @@ export default function App() {
           {/* Page title block */}
           <div className="flex items-center gap-3 min-w-0">
             <div
-              className="hidden sm:grid w-10 h-10 rounded-xl bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/15 place-items-center shrink-0"
+              className="hidden sm:grid w-10 h-10 md:w-9 md:h-9 rounded-xl bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/15 place-items-center shrink-0"
               aria-hidden="true"
             >
               <Icon name={pageIcon} size={20} />
             </div>
 
             <div className="min-w-0">
-              <p className="text-[0.625rem] uppercase tracking-[0.12em] text-slate-400 font-semibold leading-tight truncate">
+              <p className="text-[0.625rem] uppercase tracking-[0.12em] text-slate-400 font-semibold leading-tight truncate md:hidden">
                 Hofileña Medical Centrum
               </p>
               <h2 className="text-lg md:text-xl font-semibold text-slate-900 tracking-tight leading-tight truncate">
@@ -405,13 +412,21 @@ export default function App() {
         </header>
 
         <div className="p-4 md:p-6 flex-1">
-          {effectivePage === "employees" ? (
-            <EmployeesPage role={role} />
-          ) : effectivePage === "settings" ? (
-            <SettingsPage role={role} onSaved={reloadSettings} />
-          ) : (
-            <SchedulerPage role={role} onDirtyChange={setSchedulerDirty} />
-          )}
+          <Suspense
+            fallback={
+              <div className="py-20 grid place-items-center">
+                <span className={`${SPINNER} w-6 h-6`} role="status" aria-label="Loading" />
+              </div>
+            }
+          >
+            {effectivePage === "employees" ? (
+              <EmployeesPage role={role} />
+            ) : effectivePage === "settings" ? (
+              <SettingsPage role={role} onSaved={reloadSettings} />
+            ) : (
+              <SchedulerPage role={role} onDirtyChange={setSchedulerDirty} />
+            )}
+          </Suspense>
         </div>
       </main>
 
