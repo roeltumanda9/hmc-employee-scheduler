@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import Icon from "../components/Icon";
+import { BTN, BTN_SIZE, CARD, INPUT, LABEL, SPINNER_ON_BRAND } from "../lib/ui";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -22,19 +24,25 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col items-center text-center gap-3 mb-6">
+    <div className="relative min-h-dvh flex items-center justify-center p-4 overflow-hidden">
+      {/* Soft brand glow behind the card */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(60rem_30rem_at_50%_-10%,rgb(34_197_94/0.16),transparent_70%)]"
+        aria-hidden="true"
+      />
+
+      <div className="relative w-full max-w-sm animate-pop-in">
+        <div className="flex flex-col items-center text-center gap-4 mb-7">
           <img
             src="/logo.png"
             alt="Hofileña Medical Centrum"
-            className="w-20 h-20 rounded-full bg-white p-0.5 ring-1 ring-green-100"
+            className="w-20 h-20 rounded-full bg-white p-1 ring-1 ring-slate-900/[0.08] shadow-raised"
           />
           <div>
-            <h1 className="text-lg font-bold tracking-tight leading-tight text-green-900">
+            <h1 className="text-xl font-semibold tracking-tight leading-tight text-slate-900">
               Hofileña Medical Centrum
             </h1>
-            <p className="text-sm text-green-700/70 leading-tight mt-1">
+            <p className="text-sm text-green-700 font-medium leading-tight mt-1.5">
               Employee Scheduler
             </p>
           </div>
@@ -42,69 +50,72 @@ export default function LoginPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 space-y-4"
+          className={`${CARD} shadow-raised p-6 sm:p-7 space-y-5`}
         >
           <div>
-            <h2 className="text-base font-semibold text-slate-800">Sign in</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="text-lg font-semibold text-slate-900 tracking-tight">Sign in</h2>
+            <p className="text-sm text-slate-500 mt-1">
               Enter your email and password to continue.
             </p>
           </div>
 
           <label className="block">
-            <span className="block text-xs font-medium text-slate-600 mb-1.5">
-              Email
-            </span>
+            <span className={LABEL}>Email</span>
             <input
               type="email"
               required
               autoFocus
+              autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@hmc.com"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition"
+              className={`${INPUT} h-11`}
             />
           </label>
 
           <label className="block">
-            <span className="block text-xs font-medium text-slate-600 mb-1.5">
-              Password
-            </span>
+            <span className={LABEL}>Password</span>
             <input
               type="password"
               required
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition"
+              className={`${INPUT} h-11`}
             />
           </label>
 
           {error && (
-            <div className="rounded-xl bg-rose-50 ring-1 ring-rose-100 px-3.5 py-2.5 text-xs text-rose-700">
-              {error}
+            <div
+              role="alert"
+              className="flex items-start gap-2.5 rounded-xl bg-rose-50 ring-1 ring-inset ring-rose-200/80 px-3.5 py-2.5 text-sm text-rose-800 animate-pop-in"
+            >
+              <Icon name="alertCircle" size={16} className="mt-0.5 shrink-0 text-rose-500" />
+              <span className="min-w-0 break-words">{error}</span>
             </div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 active:scale-95 shadow-sm shadow-green-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            className={`${BTN.primary} ${BTN_SIZE.lg} w-full`}
           >
             {loading ? (
               <>
-                <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                <span className={SPINNER_ON_BRAND} />
                 Signing in…
               </>
             ) : (
               "Sign in"
             )}
           </button>
-
-          <p className="text-[11px] text-slate-400 text-center">
-            Accounts are created by HR. Contact the admin if you need access.
-          </p>
         </form>
+
+        <p className="mt-5 px-2 text-xs text-slate-500 text-center text-balance leading-relaxed">
+          <Icon name="lock" size={12} className="inline-block -mt-0.5 mr-1.5" />
+          Accounts are created by HR. Contact the admin if you need access.
+        </p>
       </div>
     </div>
   );

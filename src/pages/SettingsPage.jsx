@@ -7,9 +7,18 @@ import { friendlyError } from "../lib/errors";
 import { formatName } from "../lib/format";
 import ConfirmModal from "../components/ConfirmModal";
 import ErrorBanner from "../components/ErrorBanner";
-
-const INPUT =
-  "w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition";
+import Icon from "../components/Icon";
+import {
+  BTN,
+  BTN_SIZE,
+  CARD,
+  CARD_FOOTER,
+  HINT,
+  INPUT,
+  INPUT_SM,
+  LABEL,
+  SPINNER_ON_BRAND,
+} from "../lib/ui";
 
 const BLANK_DEPARTMENT = {
   name: "",
@@ -28,7 +37,8 @@ export default function SettingsPage({ role, onSaved }) {
 
   if (!canManageEmployees(role)) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 text-sm text-slate-600">
+      <div className={`${CARD} p-6 flex items-center gap-3 text-sm text-slate-600`}>
+        <Icon name="lock" size={18} className="text-slate-400 shrink-0" />
         Only super admins can change settings.
       </div>
     );
@@ -36,14 +46,19 @@ export default function SettingsPage({ role, onSaved }) {
 
   if (settings.source !== "database") {
     return (
-      <div className="rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-5 text-sm text-amber-900 space-y-2 max-w-3xl">
-        <p className="font-semibold">Settings aren't available yet</p>
-        <p>{settings.loadError || "Loading settings…"}</p>
-        <p>
-          If the settings tables haven't been created, run{" "}
-          <code className="font-mono text-xs">supabase/proposed_settings.sql</code>{" "}
-          in the Supabase SQL Editor, then reload this page.
-        </p>
+      <div className="rounded-2xl bg-amber-50 ring-1 ring-inset ring-amber-200/80 p-5 text-sm text-amber-900 flex items-start gap-3 max-w-3xl">
+        <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 grid place-items-center shrink-0" aria-hidden="true">
+          <Icon name="alert" size={16} strokeWidth={2.25} />
+        </span>
+        <div className="space-y-2 min-w-0 leading-relaxed">
+          <p className="font-semibold">Settings aren't available yet</p>
+          <p>{settings.loadError || "Loading settings…"}</p>
+          <p>
+            If the settings tables haven't been created, run{" "}
+            <code className="font-mono text-xs bg-amber-100/80 rounded px-1 py-0.5">supabase/proposed_settings.sql</code>{" "}
+            in the Supabase SQL Editor, then reload this page.
+          </p>
+        </div>
       </div>
     );
   }
@@ -62,7 +77,7 @@ export default function SettingsPage({ role, onSaved }) {
   );
 
   return (
-    <div className="space-y-8 max-w-4xl">
+    <div className="space-y-8 sm:space-y-10 max-w-4xl">
       <datalist id="banner-suggestions">
         {bannerSuggestions.map((b) => (
           <option key={b} value={b} />
@@ -91,12 +106,9 @@ export default function SettingsPage({ role, onSaved }) {
             type="button"
             onClick={() => setAdding(true)}
             disabled={adding}
-            className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 active:scale-95 shadow-sm shadow-green-200 disabled:opacity-50 transition"
+            className={`${BTN.primary} ${BTN_SIZE.md} shrink-0`}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
+            <Icon name="plus" size={16} strokeWidth={2.5} />
             Add department
           </button>
         </div>
@@ -128,8 +140,8 @@ export default function SettingsPage({ role, onSaved }) {
 function SectionHeading({ title, description }) {
   return (
     <div>
-      <h2 className="text-base font-semibold text-slate-800">{title}</h2>
-      <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">{description}</p>
+      <h2 className="text-base sm:text-lg font-semibold text-slate-900 tracking-tight">{title}</h2>
+      <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">{description}</p>
     </div>
   );
 }
@@ -137,18 +149,16 @@ function SectionHeading({ title, description }) {
 function Field({ label, hint, children }) {
   return (
     <label className="block">
-      <span className="block text-xs font-medium text-slate-600 mb-1.5">
-        {label}
-      </span>
+      <span className={LABEL}>{label}</span>
       {children}
-      {hint && <span className="block text-[11px] text-slate-500 mt-1">{hint}</span>}
+      {hint && <span className={HINT}>{hint}</span>}
     </label>
   );
 }
 
 function SaveBar({ dirty, saving, onSave, onReset, extra }) {
   return (
-    <div className="px-4 sm:px-5 py-3 bg-slate-50 border-t border-slate-100 flex flex-col-reverse sm:flex-row sm:items-center gap-2">
+    <div className={`${CARD_FOOTER} sm:px-5 flex flex-col-reverse sm:flex-row sm:items-center gap-2`}>
       {extra}
       <div className="sm:ml-auto flex flex-col-reverse sm:flex-row gap-2">
         {onReset && (
@@ -156,7 +166,7 @@ function SaveBar({ dirty, saving, onSave, onReset, extra }) {
             type="button"
             onClick={onReset}
             disabled={!dirty || saving}
-            className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-sm font-medium text-slate-600 rounded-xl hover:bg-slate-100 disabled:opacity-40 transition"
+            className={`${BTN.ghost} ${BTN_SIZE.md} w-full sm:w-auto`}
           >
             Undo changes
           </button>
@@ -165,11 +175,9 @@ function SaveBar({ dirty, saving, onSave, onReset, extra }) {
           type="button"
           onClick={onSave}
           disabled={!dirty || saving}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:py-2 text-sm font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 active:scale-95 shadow-sm shadow-green-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className={`${BTN.primary} ${BTN_SIZE.md} px-5 w-full sm:w-auto`}
         >
-          {saving && (
-            <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-          )}
+          {saving && <span className={SPINNER_ON_BRAND} />}
           {saving ? "Saving…" : "Save"}
         </button>
       </div>
@@ -222,8 +230,8 @@ function PrintSettingsCard({ print, onSaved }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 overflow-hidden">
-      <div className="p-4 sm:p-5 space-y-4">
+    <div className={`${CARD} overflow-hidden`}>
+      <div className="p-4 sm:p-6 space-y-4">
         <ErrorBanner message={error} onDismiss={() => setError("")} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -266,14 +274,19 @@ function BannerPreview({ src }) {
   return (
     <div className="flex items-end">
       {failedSrc === src ? (
-        <p className="text-xs text-rose-600">No image found at {src}</p>
+        <p className="text-xs text-rose-600 flex items-center gap-1.5">
+          <Icon name="alertCircle" size={14} className="shrink-0" />
+          No image found at {src}
+        </p>
       ) : (
-        <img
-          src={src}
-          alt="Banner preview"
-          onError={() => setFailedSrc(src)}
-          className="max-h-16 max-w-full rounded-lg ring-1 ring-slate-200 bg-white object-contain"
-        />
+        <div className="w-full rounded-xl bg-slate-50 ring-1 ring-inset ring-slate-900/[0.05] p-2">
+          <img
+            src={src}
+            alt="Banner preview"
+            onError={() => setFailedSrc(src)}
+            className="max-h-16 max-w-full mx-auto rounded-md bg-white object-contain"
+          />
+        </div>
       )}
     </div>
   );
@@ -400,8 +413,12 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
 
   return (
     <div
-      className={`bg-white rounded-2xl shadow-sm ring-1 overflow-hidden ${
-        isNew ? "ring-green-300" : "ring-slate-200"
+      className={`bg-white rounded-2xl shadow-card overflow-hidden transition-shadow ${
+        isNew
+          ? "ring-2 ring-green-600/40 animate-pop-in"
+          : open
+            ? "ring-1 ring-slate-900/[0.08] shadow-raised"
+            : "ring-1 ring-slate-900/[0.06]"
       }`}
     >
       {/* Summary row */}
@@ -411,13 +428,23 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           aria-controls={panelId}
-          className="w-full px-4 sm:px-5 py-3.5 flex items-center gap-3 text-left hover:bg-slate-50 transition"
+          className="w-full px-4 sm:px-5 py-4 flex items-center gap-3 text-left hover:bg-slate-50/80 transition-colors"
         >
+          <span
+            className={`hidden sm:grid w-10 h-10 rounded-xl place-items-center shrink-0 ring-1 ring-inset ${
+              department.active
+                ? "bg-green-50 text-green-700 ring-green-600/15"
+                : "bg-slate-50 text-slate-400 ring-slate-900/[0.06]"
+            }`}
+            aria-hidden="true"
+          >
+            <Icon name="building" size={18} />
+          </span>
           <span className="flex-1 min-w-0">
             <span className="flex items-center gap-2">
-              <span className="font-semibold text-slate-800 truncate">{department.name}</span>
+              <span className="font-semibold text-slate-900 truncate">{department.name}</span>
               {!department.active && (
-                <span className="shrink-0 text-[10px] uppercase tracking-wider font-bold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
+                <span className="shrink-0 text-[0.625rem] uppercase tracking-wider font-semibold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
                   Inactive
                 </span>
               )}
@@ -426,7 +453,7 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
               {department.shifts.map((code) => (
                 <span
                   key={code}
-                  className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${STATUS_MAP[code]?.classes || "bg-slate-100 text-slate-600"}`}
+                  className={`text-[0.625rem] font-bold rounded-md px-1.5 py-0.5 ${STATUS_MAP[code]?.classes || "bg-slate-100 text-slate-600"}`}
                 >
                   {code}
                 </span>
@@ -436,19 +463,25 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
           <span className="hidden sm:block text-xs text-slate-500 text-right shrink-0 max-w-[40%] truncate">
             {department.prepared_by_name || "No “Prepared by” set"}
           </span>
-          <svg
-            className={`text-slate-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-            width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+          <Icon
+            name="chevronDown"
+            size={18}
+            className={`text-slate-400 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          />
         </button>
       )}
 
       {open && (
-        <div id={panelId} className={isNew ? "" : "border-t border-slate-100"}>
-          <div className="p-4 sm:p-5 space-y-5">
-            {isNew && <h3 className="text-sm font-semibold text-slate-800">New department</h3>}
+        <div id={panelId} className={isNew ? "" : "border-t border-slate-100 animate-fade-in"}>
+          <div className="p-4 sm:p-6 space-y-6">
+            {isNew && (
+              <h3 className="text-base font-semibold text-slate-900 tracking-tight flex items-center gap-2">
+                <span className="w-7 h-7 rounded-lg bg-green-50 text-green-700 grid place-items-center" aria-hidden="true">
+                  <Icon name="plus" size={14} strokeWidth={2.5} />
+                </span>
+                New department
+              </h3>
+            )}
             <ErrorBanner message={error} onDismiss={() => setError("")} />
 
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_7rem] gap-4">
@@ -463,16 +496,16 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
               </Field>
             </div>
 
-            <label className="flex items-start gap-3 cursor-pointer">
+            <label className="flex items-start gap-3 cursor-pointer rounded-xl bg-slate-50/80 ring-1 ring-inset ring-slate-900/[0.05] p-3.5 hover:bg-slate-50 transition-colors">
               <input
                 type="checkbox"
                 checked={form.active}
                 onChange={(e) => update("active", e.target.checked)}
-                className="mt-0.5 w-4 h-4 accent-green-600"
+                className="mt-0.5 w-[1.125rem] h-[1.125rem] accent-green-600 shrink-0"
               />
               <span>
-                <span className="block text-sm font-medium text-slate-800">Active</span>
-                <span className="block text-xs text-slate-500">
+                <span className="block text-sm font-semibold text-slate-900">Active</span>
+                <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">
                   Inactive departments are hidden from the Scheduler and from new employees. Existing employees keep it.
                 </span>
               </span>
@@ -512,7 +545,7 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
                 <button
                   type="button"
                   onClick={onCancel}
-                  className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-sm font-medium text-slate-600 rounded-xl hover:bg-slate-100 transition"
+                  className={`${BTN.ghost} ${BTN_SIZE.md} w-full sm:w-auto`}
                 >
                   Cancel
                 </button>
@@ -521,8 +554,9 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
                   type="button"
                   onClick={() => setConfirmDelete(true)}
                   disabled={saving}
-                  className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-sm font-medium text-rose-600 rounded-xl hover:bg-rose-50 disabled:opacity-40 transition"
+                  className={`${BTN.destructiveGhost} ${BTN_SIZE.md} w-full sm:w-auto`}
                 >
+                  <Icon name="trash" size={15} />
                   Delete department
                 </button>
               )
@@ -548,7 +582,7 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
 function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
   return (
     <fieldset className="space-y-3">
-      <legend className="text-xs font-medium text-slate-600">Shifts this department can use</legend>
+      <legend className="text-xs font-semibold text-slate-700 mb-3">Shifts this department can use</legend>
 
       <div className="flex flex-wrap gap-1.5">
         {STATUSES.map((s) => {
@@ -560,8 +594,10 @@ function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
               aria-pressed={on}
               onClick={() => onToggle(s.code)}
               title={s.label}
-              className={`min-w-[3rem] px-2.5 py-1.5 rounded-lg text-xs font-bold transition ring-1 ${
-                on ? `${s.classes} ring-transparent shadow-sm` : "bg-white text-slate-400 ring-slate-200 hover:text-slate-600"
+              className={`min-w-[3.25rem] h-9 px-2.5 rounded-lg text-xs font-bold tracking-tight transition active:scale-95 ${
+                on
+                  ? `${s.classes} shadow-[inset_0_0_0_1px_rgb(15_23_42/0.08)]`
+                  : "bg-white text-slate-400 ring-1 ring-inset ring-slate-200 hover:text-slate-700 hover:ring-slate-300"
               }`}
             >
               {s.code}
@@ -571,29 +607,32 @@ function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
       </div>
 
       {shifts.length > 0 && (
-        <ul className="divide-y divide-slate-100 rounded-xl ring-1 ring-slate-200">
+        <ul className="divide-y divide-slate-100 rounded-xl ring-1 ring-inset ring-slate-900/[0.07] overflow-hidden">
           {shifts.map((code, i) => {
             const s = STATUS_MAP[code];
             if (!s) return null;
             return (
-              <li key={code} className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 px-3 py-2">
+              <li key={code} className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 px-3 py-2.5 bg-white">
+                <span className="w-6 text-right text-xs font-medium text-slate-400 tabular-nums" aria-hidden="true">
+                  {i + 1}
+                </span>
                 <span className={`min-w-[3rem] text-center px-2 py-1 rounded-md text-xs font-bold ${s.classes}`}>
                   {code}
                 </span>
-                <span className="flex-1 min-w-[6rem] text-sm text-slate-700">{s.label}</span>
+                <span className="flex-1 min-w-[6rem] text-sm font-medium text-slate-800">{s.label}</span>
                 <input
-                  className={`${INPUT} sm:w-56 py-1.5`}
+                  className={`${INPUT_SM} sm:w-56 order-last sm:order-none basis-full sm:basis-auto`}
                   value={times[code] || ""}
                   onChange={(e) => onTime(code, e.target.value)}
                   placeholder={s.time || "No time"}
                   aria-label={`${s.label} time for this department`}
                 />
-                <span className="flex gap-1">
-                  <button type="button" onClick={() => onMove(code, -1)} disabled={i === 0} aria-label={`Move ${code} up`} className="w-8 h-8 grid place-items-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15" /></svg>
+                <span className="flex gap-0.5">
+                  <button type="button" onClick={() => onMove(code, -1)} disabled={i === 0} aria-label={`Move ${code} up`} className={`${BTN.ghost} ${BTN_SIZE.iconSm}`}>
+                    <Icon name="chevronUp" size={15} strokeWidth={2.5} />
                   </button>
-                  <button type="button" onClick={() => onMove(code, 1)} disabled={i === shifts.length - 1} aria-label={`Move ${code} down`} className="w-8 h-8 grid place-items-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+                  <button type="button" onClick={() => onMove(code, 1)} disabled={i === shifts.length - 1} aria-label={`Move ${code} down`} className={`${BTN.ghost} ${BTN_SIZE.iconSm}`}>
+                    <Icon name="chevronDown" size={15} strokeWidth={2.5} />
                   </button>
                 </span>
               </li>
@@ -601,7 +640,7 @@ function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
           })}
         </ul>
       )}
-      <p className="text-[11px] text-slate-500">
+      <p className="text-xs text-slate-500 leading-relaxed">
         Leave a time empty to use the shift's standard time (shown in grey). The order here is the order in the shift picker.
       </p>
     </fieldset>

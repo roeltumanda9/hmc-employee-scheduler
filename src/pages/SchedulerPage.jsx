@@ -14,6 +14,18 @@ import { handleMenuKeyDown } from "../lib/useDialog";
 import ScheduleGrid from "../components/ScheduleGrid";
 import ConfirmModal from "../components/ConfirmModal";
 import ErrorBanner from "../components/ErrorBanner";
+import Icon from "../components/Icon";
+import {
+  BTN,
+  BTN_SIZE,
+  CARD,
+  EYEBROW,
+  MENU,
+  MENU_HEADING,
+  MENU_ITEM,
+  SPINNER,
+  SPINNER_ON_BRAND,
+} from "../lib/ui";
 
 import { STATUS_MAP } from "../lib/statuses";
 
@@ -469,81 +481,70 @@ export default function SchedulerPage({ role, onDirtyChange }) {
     });
   }
 
+  const showEditAction = canEdit && !isAllDepts;
+
   return (
-    <div className="space-y-3 sm:space-y-4">
+    <div className={`space-y-3 sm:space-y-4 ${editing ? "pb-20 sm:pb-0" : ""}`}>
       {/* Pinned only on large screens, just below the app header (z-30).
-          On phones and tablets it scrolls away so the grid gets the screen. */}
-      <div className="lg:sticky lg:top-[calc(4.5rem+1px)] lg:z-20 lg:-mx-6 lg:px-6 lg:py-2 lg:bg-slate-100/80 lg:backdrop-blur lg:border-b lg:border-slate-200">
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-2.5 sm:p-4 grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:flex-wrap sm:items-end sm:gap-3">
+          On phones and tablets it scrolls away so the grid gets the screen.
+          z-40 keeps its department menu above the grid's sticky header (z-30). */}
+      <div className="lg:sticky lg:top-[4.5rem] lg:z-40 lg:-mx-6 lg:px-6 lg:py-2.5 lg:bg-[#f6f8f7]/85 lg:backdrop-blur-md">
+        <div className={`${CARD} p-2.5 sm:p-3 flex flex-col gap-2.5 lg:flex-row lg:flex-wrap lg:items-center`}>
           {/* MONTH */}
-          <div className="order-1 sm:order-none col-span-2 flex flex-col items-center sm:flex-1 sm:min-w-[300px]">
-            <div className="flex items-center justify-center gap-2 sm:gap-3 h-10 sm:h-12 w-full">
-              <button
-                onClick={() => confirmDiscard(() => changeMonth(-1))}
-                disabled={!canGoPrev()}
-                aria-label="Previous month"
-                className="w-9 h-9 sm:w-10 sm:h-10 md:w-11 md:h-11 grid place-items-center rounded-xl text-white bg-gradient-to-br from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 active:scale-95 shadow-sm shadow-green-200 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none disabled:from-slate-200 disabled:to-slate-300 disabled:text-slate-400 shrink-0"
-                title={
-                  canGoPrev() ? "Previous month" : "No earlier months available"
-                }
-              >
-                <svg
-                  className="w-4 h-4 sm:w-5 sm:h-5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
-              </button>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              onClick={() => confirmDiscard(() => changeMonth(-1))}
+              disabled={!canGoPrev()}
+              aria-label="Previous month"
+              className={`${BTN.secondary} ${BTN_SIZE.icon} sm:h-11 sm:w-11 shrink-0`}
+              title={
+                canGoPrev() ? "Previous month" : "No earlier months available"
+              }
+            >
+              <Icon name="chevronLeft" size={18} strokeWidth={2.5} />
+            </button>
 
-              <div className="text-center flex-1 sm:flex-none sm:min-w-[200px]">
-                <div
-                  className="text-base sm:text-xl md:text-2xl font-black text-green-800 tracking-tight leading-none"
-                  aria-live="polite"
-                >
-                  {periodTitle(days, month, year)}
-                </div>
+            <div className="flex-1 min-w-0 text-center px-1 lg:min-w-[12.5rem]">
+              <div
+                className="text-[1.0625rem] sm:text-lg font-bold text-slate-900 tracking-tight leading-tight truncate"
+                aria-live="polite"
+              >
+                {periodTitle(days, month, year)}
               </div>
-
-              <button
-                onClick={() => confirmDiscard(() => changeMonth(1))}
-                disabled={!canGoNext()}
-                aria-label="Next month"
-                className="w-9 h-9 sm:w-10 sm:h-10 md:w-11 md:h-11 grid place-items-center rounded-xl text-white bg-gradient-to-br from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 active:scale-95 shadow-sm shadow-green-200 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none disabled:from-slate-200 disabled:to-slate-300 disabled:text-slate-400 shrink-0"
-                title={canGoNext() ? "Next month" : "No later months available"}
-              >
-                <svg
-                  className="w-4 h-4 sm:w-5 sm:h-5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
+              <div className="text-xs text-slate-500 leading-tight mt-0.5 truncate">
+                {half === 1 ? "1st period" : "2nd period"}
+                <span className="mx-1.5 text-slate-300" aria-hidden="true">•</span>
+                <span className="tabular-nums">{visibleEmployees.length}</span>{" "}
+                {visibleEmployees.length === 1 ? "employee" : "employees"}
+              </div>
             </div>
+
+            <button
+              onClick={() => confirmDiscard(() => changeMonth(1))}
+              disabled={!canGoNext()}
+              aria-label="Next month"
+              className={`${BTN.secondary} ${BTN_SIZE.icon} sm:h-11 sm:w-11 shrink-0`}
+              title={canGoNext() ? "Next month" : "No later months available"}
+            >
+              <Icon name="chevronRight" size={18} strokeWidth={2.5} />
+            </button>
           </div>
 
-          <div className="hidden xl:block h-12 w-px bg-slate-200" />
+          <div className="hidden xl:block h-8 w-px bg-slate-200 mx-0.5" aria-hidden="true" />
 
-          {/* PERIOD */}
-          <div className="order-2 sm:order-none flex flex-col items-stretch sm:items-center min-w-0">
-            <div
-              className="hidden sm:block text-[10px] uppercase tracking-[0.2em] text-green-700 font-bold mb-1"
-            >
-              Period
-            </div>
+          {/* DEPARTMENT + PERIOD */}
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-2.5 lg:flex lg:items-center">
+            <DepartmentDropdown
+              value={dept}
+              onChange={(next) => {
+                if (next !== dept) confirmDiscard(() => setDept(next));
+              }}
+            />
+
             <div
               role="group"
               aria-label="Payroll period"
-              className="inline-flex rounded-xl bg-slate-100 p-1 h-10 sm:h-12 items-center shadow-inner w-full sm:w-auto justify-center"
+              className="inline-flex h-10 sm:h-11 p-1 rounded-xl bg-slate-100 ring-1 ring-inset ring-slate-900/[0.04]"
             >
               {[
                 { value: 1, short: "27–11", long: "1st · 27–11" },
@@ -555,10 +556,10 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                     if (half !== p.value) confirmDiscard(() => setHalf(p.value));
                   }}
                   aria-pressed={half === p.value}
-                  className={`px-2 sm:px-4 h-full text-xs sm:text-sm font-bold rounded-lg transition flex-1 sm:flex-none whitespace-nowrap ${
+                  className={`px-2.5 sm:px-3.5 h-full text-xs sm:text-sm font-semibold rounded-[9px] whitespace-nowrap tabular-nums transition ${
                     half === p.value
-                      ? "bg-white text-green-700 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
+                      ? "bg-white text-green-700 shadow-card ring-1 ring-slate-900/[0.06]"
+                      : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
                   <span className="sm:hidden">{p.short}</span>
@@ -568,16 +569,24 @@ export default function SchedulerPage({ role, onDirtyChange }) {
             </div>
           </div>
 
-          <div className="hidden xl:block h-12 w-px bg-slate-200" />
+          {/* ACTIONS (view mode) */}
+          {!editing && (
+            <div
+              className={`grid gap-2 sm:gap-2.5 lg:flex lg:items-center lg:ml-auto ${
+                showEditAction ? "grid-cols-2" : "grid-cols-1"
+              }`}
+            >
+              <button
+                onClick={handlePrint}
+                disabled={visibleEmployees.length === 0}
+                className={`${BTN.secondary} ${BTN_SIZE.md} sm:h-11`}
+                title="Print this schedule"
+              >
+                <Icon name="printer" size={16} />
+                Print
+              </button>
 
-          {/* ACTIONS */}
-          {canEdit && !isAllDepts && (
-            <div className="order-4 sm:order-none flex flex-col items-stretch sm:items-center min-w-0">
-              <div className="hidden sm:block text-[10px] uppercase tracking-[0.2em] text-green-700 font-bold mb-1">
-                {editing ? "Editing" : "Actions"}
-              </div>
-
-              {!editing ? (
+              {showEditAction && (
                 <button
                   onClick={() => {
                     setEditSnapshot(schedules);
@@ -585,178 +594,96 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                     setEditing(true);
                   }}
                   disabled={loading || visibleEmployees.length === 0}
-                  className="inline-flex items-center justify-center gap-2 px-4 sm:px-5 h-10 sm:h-12 w-full sm:w-auto text-xs sm:text-sm font-black text-white bg-gradient-to-br from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 active:scale-95 shadow-sm shadow-amber-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none rounded-xl transition"
+                  className={`${BTN.primary} ${BTN_SIZE.md} sm:h-11 sm:px-5`}
                   title="Enable editing"
                 >
-                  <svg
-                    className="w-3.5 h-3.5 sm:w-4 sm:h-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
-                  </svg>
-                  EDIT
+                  <Icon name="pencil" size={16} strokeWidth={2.25} />
+                  Edit
                 </button>
-              ) : (
-                <div className="flex items-center gap-1.5 sm:gap-2 h-10 sm:h-12 w-full sm:w-auto">
-                  <button
-                    onClick={cancelEdit}
-                    disabled={saving}
-                    className="inline-flex items-center justify-center gap-2 px-3 sm:px-4 h-full flex-1 sm:flex-none text-xs sm:text-sm font-black text-slate-700 bg-white border-2 border-slate-200 hover:bg-slate-50 active:scale-95 disabled:opacity-40 rounded-xl transition"
-                    title="Discard changes"
-                  >
-                    CANCEL
-                  </button>
-                  <button
-                    onClick={saveEdits}
-                    disabled={saving || pendingCount === 0}
-                    className="inline-flex items-center justify-center gap-2 px-4 sm:px-5 h-full flex-1 sm:flex-none text-xs sm:text-sm font-black text-white bg-gradient-to-br from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 active:scale-95 shadow-sm shadow-green-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none rounded-xl transition"
-                    title="Save changes"
-                  >
-                    {saving ? (
-                      <>
-                        <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                        SAVING…
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          className="w-3.5 h-3.5 sm:w-4 sm:h-4"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="3.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        SAVE
-                      </>
-                    )}
-                  </button>
-                </div>
               )}
             </div>
           )}
 
-          <div className="hidden xl:block h-12 w-px bg-slate-200" />
-
-          {/* DEPARTMENT */}
-          <div className="order-3 sm:order-none flex flex-col items-stretch sm:items-center min-w-0">
-            <div className="hidden sm:block text-[10px] uppercase tracking-[0.2em] text-green-700 font-bold mb-1">
-              Department
-            </div>
-            <div className="h-10 sm:h-12 flex items-stretch w-full sm:w-auto">
-              <DepartmentDropdown
-                value={dept}
-                onChange={(next) => {
-                  if (next !== dept) confirmDiscard(() => setDept(next));
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="hidden xl:block h-12 w-px bg-slate-200" />
-
-          {/* TOOLS */}
-          <div
-            className={`order-5 sm:order-none flex flex-col items-stretch sm:items-center min-w-0 ${
-              canEdit && !isAllDepts ? "" : "col-span-2"
-            }`}
-          >
-            <div className="hidden sm:block text-[10px] uppercase tracking-[0.2em] text-green-700 font-bold mb-1">
-              Tools
-            </div>
-            <div className="flex items-center gap-2 h-10 sm:h-12 w-full sm:w-auto">
-              {canEdit && editing && (
+          {/* ACTIONS (edit mode): a bottom bar on phones, inline from sm up */}
+          {canEdit && editing && (
+            <div className="fixed inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-8px_24px_-12px_rgb(15_23_42/0.2)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] animate-sheet-up sm:static sm:z-auto sm:ml-auto sm:bg-transparent sm:backdrop-blur-none sm:border-0 sm:shadow-none sm:p-0 sm:animate-none">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={askClearHalf}
                   disabled={isAllDepts || visibleEmployees.length === 0}
-                  className="inline-flex items-center justify-center gap-2 px-3 sm:px-4 h-full flex-1 sm:flex-none text-xs sm:text-sm font-medium rounded-xl border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  className={`${BTN.destructiveSoft} h-11 w-11 sm:w-auto sm:px-4 shrink-0`}
+                  aria-label="Clear this period"
                   title={
                     isAllDepts
                       ? "Not available in preview mode"
                       : "Clear this period"
                   }
                 >
-                  <svg
-                    className="w-3.5 h-3.5 sm:w-4 sm:h-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    <path d="M10 11v6" />
-                    <path d="M14 11v6" />
-                  </svg>
-                  Clear
+                  <Icon name="trash" size={16} />
+                  <span className="hidden sm:inline">Clear</span>
                 </button>
-              )}
 
-              {!editing && (
-                <button
-                  onClick={handlePrint}
-                  disabled={visibleEmployees.length === 0}
-                  className="inline-flex items-center justify-center gap-2 px-3 sm:px-4 h-full flex-1 sm:flex-none text-xs sm:text-sm font-semibold rounded-xl border border-green-200 text-green-700 bg-white hover:bg-green-50 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                  title="Print this schedule"
-                >
-                  <svg
-                    className="w-3.5 h-3.5 sm:w-4 sm:h-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="6 9 6 2 18 2 18 9" />
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                    <rect x="6" y="14" width="12" height="8" />
-                  </svg>
-                  Print
-                </button>
-              )}
+                {!isAllDepts && (
+                  <>
+                    <button
+                      onClick={cancelEdit}
+                      disabled={saving}
+                      className={`${BTN.secondary} h-11 px-4 flex-1 sm:flex-none`}
+                      title="Discard changes"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={saveEdits}
+                      disabled={saving || pendingCount === 0}
+                      className={`${BTN.primary} h-11 px-5 flex-[1.4] sm:flex-none`}
+                      title="Save changes"
+                    >
+                      {saving ? (
+                        <>
+                          <span className={SPINNER_ON_BRAND} />
+                          Saving…
+                        </>
+                      ) : (
+                        <>
+                          <Icon name="check" size={16} strokeWidth={3} />
+                          Save
+                          {pendingCount > 0 && (
+                            <span className="min-w-5 h-5 px-1.5 rounded-full bg-white/20 text-xs font-bold tabular-nums grid place-items-center">
+                              {pendingCount}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
       {editing && (
-        <div className="bg-amber-50 ring-1 ring-amber-200 rounded-2xl px-3 sm:px-4 py-2 flex items-center gap-3 text-xs sm:text-sm text-amber-800 max-w-6xl mx-auto w-full">
-          <svg
-            className="w-4 h-4 shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="flex items-center gap-3 rounded-2xl bg-amber-50 ring-1 ring-inset ring-amber-200/80 px-3 sm:px-4 py-2.5 text-xs sm:text-sm text-amber-900 animate-fade-in">
+          <span
+            className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 grid place-items-center shrink-0"
+            aria-hidden="true"
           >
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
-          </svg>
-          <span className="flex-1">
-            <strong>Editing mode</strong> — changes aren't saved until you click{" "}
-            <strong>Save</strong>.
+            <Icon name="pencil" size={14} strokeWidth={2.5} />
+          </span>
+          <span className="flex-1 min-w-0">
+            <strong className="font-semibold">Editing mode</strong> — changes aren't saved until you click{" "}
+            <strong className="font-semibold">Save</strong>.
             {pendingCount > 0 && (
-              <span className="ml-1 text-amber-700">
+              <span className="ml-1 text-amber-700 tabular-nums">
                 ({pendingCount} unsaved {pendingCount === 1 ? "change" : "changes"})
               </span>
             )}
           </span>
           <button
             onClick={cancelEdit}
-            className="text-[11px] font-semibold text-amber-900 underline hover:no-underline"
+            className="shrink-0 text-xs font-semibold text-amber-900 underline underline-offset-2 hover:no-underline"
           >
             Discard
           </button>
@@ -765,64 +692,49 @@ export default function SchedulerPage({ role, onDirtyChange }) {
 
       <ErrorBanner message={error} onDismiss={() => setError("")} />
 
-      {/* Stats row */}
-      <div className="flex flex-col sm:flex-row items-stretch gap-3">
-        <div className="w-full sm:w-[180px] sm:shrink-0 flex">
-          <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 px-4 py-3 w-full flex flex-col items-center justify-center text-center">
-            <div className="text-[10px] uppercase tracking-widest text-green-700 font-bold">
-              Employees
-            </div>
-            <div className="mt-1 text-3xl sm:text-4xl font-black text-green-800 leading-none">
-              {visibleEmployees.length}
-            </div>
+      {/* Shift legend: one swipeable row on phones, wrapped from sm up */}
+      {!isAllDepts && legendShifts.length > 0 && (
+        <div className={`${CARD} overflow-hidden px-3 sm:px-4 py-2.5 sm:py-3`}>
+          <div className="flex items-baseline justify-between gap-3 mb-2">
+            <div className={EYEBROW}>Shifts</div>
+            <div className="text-xs font-semibold text-slate-700 truncate">{dept}</div>
           </div>
-        </div>
 
-        {!isAllDepts && legendShifts.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 px-4 py-3 sm:px-5 sm:py-4 flex-1">
-            <div className="flex items-baseline justify-between mb-2 sm:mb-3">
-              <div className="text-[10px] uppercase tracking-widest text-green-700 font-bold">
-                Shifts
-              </div>
-              <div className="text-xs sm:text-sm font-bold text-slate-700">
-                {dept}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-2">
-              {legendShifts.map((s) => (
-                <div key={s.code} className="inline-flex items-center gap-2">
-                  <span
-                    className={`inline-flex items-center justify-center min-w-[40px] sm:min-w-[48px] h-7 sm:h-8 rounded-md px-2 text-xs font-black tracking-wide shadow-sm ${s.classes}`}
-                  >
-                    {s.code}
+          <ul className="flex gap-2 overflow-x-auto scroll-none snap-x -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible">
+            {legendShifts.map((s) => (
+              <li
+                key={s.code}
+                className="snap-start shrink-0 inline-flex items-center gap-2 rounded-xl bg-slate-50 ring-1 ring-inset ring-slate-900/[0.05] p-1 pr-3"
+              >
+                <span
+                  className={`inline-flex items-center justify-center min-w-[2.75rem] h-7 rounded-lg px-2 text-xs font-bold tracking-tight shadow-[inset_0_0_0_1px_rgb(15_23_42/0.06)] ${s.classes}`}
+                >
+                  {s.code}
+                </span>
+                <span className="flex flex-col leading-tight">
+                  <span className="text-xs font-semibold text-slate-800 whitespace-nowrap">
+                    {s.label}
                   </span>
-                  <div className="flex flex-col leading-tight">
-                    <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
-                      {s.label}
+                  {s.time && (
+                    <span className="text-[0.6875rem] text-slate-500 whitespace-nowrap tabular-nums">
+                      {s.time}
                     </span>
-                    {s.time && (
-                      <span className="text-[10px] text-slate-500 whitespace-nowrap">
-                        {s.time}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {loading ? (
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-12 text-center max-w-6xl mx-auto w-full">
-          <div className="inline-block w-6 h-6 border-2 border-slate-300 border-t-green-600 rounded-full animate-spin" />
-          <p className="mt-3 text-sm text-slate-500">Loading schedule…</p>
-        </div>
+        <GridSkeleton />
       ) : visibleEmployees.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-12 text-center max-w-6xl mx-auto w-full">
-          <div className="text-4xl">👥</div>
-          <p className="mt-3 text-sm font-medium text-slate-700">
+        <div className={`${CARD} px-6 py-14 text-center`}>
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-green-50 text-green-600 ring-1 ring-inset ring-green-600/10 grid place-items-center">
+            <Icon name="users" size={24} strokeWidth={1.75} />
+          </div>
+          <p className="mt-4 text-sm font-semibold text-slate-800">
             No employees in {isAllDepts ? "any department" : dept}
           </p>
           <p className="text-xs text-slate-500 mt-1">
@@ -898,6 +810,37 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   );
 }
 
+/* ------------------ Loading skeleton ------------------ */
+function GridSkeleton() {
+  return (
+    <div
+      className="-mx-4 sm:mx-0 bg-white border-y border-slate-900/[0.07] sm:border-0 sm:rounded-2xl sm:ring-1 sm:ring-slate-900/[0.06] shadow-card overflow-hidden"
+      aria-busy="true"
+    >
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
+        <span className={`${SPINNER} w-4 h-4`} />
+        <p className="text-sm text-slate-500">Loading schedule…</p>
+      </div>
+      <div className="p-3 sm:p-4 space-y-2.5 animate-pulse" aria-hidden="true">
+        {Array.from({ length: 6 }, (_, r) => (
+          <div key={r} className="flex items-center gap-2">
+            <div className="w-24 sm:w-56 shrink-0 space-y-1.5">
+              <div className="h-3 rounded-full bg-slate-200/80 w-4/5" />
+              <div className="h-2.5 rounded-full bg-slate-100 w-1/2" />
+            </div>
+            {Array.from({ length: 10 }, (_, c) => (
+              <div
+                key={c}
+                className="h-10 sm:h-12 flex-1 min-w-10 rounded-lg bg-slate-100"
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ------------------ Department dropdown ------------------ */
 function DepartmentDropdown({ value, onChange }) {
   const settings = useSettings();
@@ -936,7 +879,7 @@ function DepartmentDropdown({ value, onChange }) {
   ];
 
   return (
-    <div ref={wrapRef} className="relative w-full sm:w-auto">
+    <div ref={wrapRef} className="relative min-w-0 w-full lg:w-auto">
       <button
         ref={btnRef}
         type="button"
@@ -950,48 +893,30 @@ function DepartmentDropdown({ value, onChange }) {
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Department: ${label}`}
-        className={`inline-flex items-center gap-2 rounded-xl border px-3 sm:px-4 h-full text-xs sm:text-sm font-bold transition w-full sm:min-w-[200px] sm:w-auto justify-between ${
+        className={`inline-flex items-center gap-2 rounded-xl px-3 sm:px-3.5 h-10 sm:h-11 text-sm font-semibold transition w-full lg:min-w-[11rem] lg:w-auto justify-between bg-white shadow-card ${
           open
-            ? "border-green-500 ring-2 ring-green-100 bg-white"
-            : "border-slate-200 bg-slate-50/60 hover:bg-white"
+            ? "ring-2 ring-green-600"
+            : "ring-1 ring-inset ring-slate-200 hover:ring-slate-300 hover:bg-slate-50"
         }`}
       >
         <span className="flex items-center gap-2 min-w-0">
-          <svg
-            className={isAll ? "text-green-600" : "text-slate-400"}
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 21h18" />
-            <path d="M5 21V7l7-4 7 4v14" />
-            <path d="M9 21v-6h6v6" />
-          </svg>
+          <Icon
+            name="building"
+            size={16}
+            className={`shrink-0 ${isAll ? "text-green-600" : "text-slate-400"}`}
+          />
           <span
-            className={`truncate ${isAll ? "text-green-700 font-semibold" : "text-slate-800"}`}
+            className={`truncate ${isAll ? "text-green-700" : "text-slate-800"}`}
           >
             {label}
           </span>
         </span>
 
-        <svg
-          className={`text-slate-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <Icon
+          name="chevronDown"
+          size={16}
+          className={`text-slate-400 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
       </button>
 
       {open && (
@@ -1000,12 +925,9 @@ function DepartmentDropdown({ value, onChange }) {
           role="listbox"
           aria-label="Select department"
           onKeyDown={(e) => handleMenuKeyDown(e, menuRef.current, close)}
-          className="absolute z-40 top-full right-0 sm:right-auto sm:left-0 mt-2 w-72 max-w-[calc(100vw-2rem)] max-h-[60vh] overflow-y-auto bg-white rounded-2xl shadow-xl ring-1 ring-slate-200 p-1.5"
+          className={`absolute z-40 top-full left-0 mt-2 w-72 max-w-[calc(100vw-2rem)] max-h-[60vh] overflow-y-auto overscroll-contain scroll-thin ${MENU}`}
         >
-          <div
-            className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-slate-400 font-semibold"
-            aria-hidden="true"
-          >
+          <div className={MENU_HEADING} aria-hidden="true">
             Select department
           </div>
 
@@ -1021,34 +943,27 @@ function DepartmentDropdown({ value, onChange }) {
                   close(true);
                   onChange(opt.value);
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-left transition ${
+                className={`${MENU_ITEM} ${
                   active
-                    ? "bg-green-50 text-green-800"
-                    : "hover:bg-slate-50 text-slate-700"
+                    ? "bg-green-50 text-green-800 focus:bg-green-100"
+                    : "text-slate-700 hover:bg-slate-100 focus:bg-slate-100"
                 }`}
               >
                 <span className="flex-1 truncate font-medium">{opt.label}</span>
 
                 {opt.preview && (
-                  <span className="text-[10px] uppercase tracking-wider font-bold text-green-700 bg-green-50 ring-1 ring-green-100 rounded-full px-1.5 py-0.5 shrink-0">
+                  <span className="text-[0.625rem] uppercase tracking-wider font-bold text-green-700 bg-white ring-1 ring-inset ring-green-600/20 rounded-full px-1.5 py-0.5 shrink-0">
                     Preview
                   </span>
                 )}
 
                 {active && (
-                  <svg
+                  <Icon
+                    name="check"
+                    size={16}
+                    strokeWidth={3}
                     className="text-green-600 shrink-0"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
+                  />
                 )}
               </button>
             );

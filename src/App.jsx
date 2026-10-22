@@ -9,6 +9,8 @@ import SettingsPage from "./pages/SettingsPage";
 import { useAutoLogout } from "./lib/useAutoLogout";
 import IdleWarningModal from "./components/IdleWarningModal";
 import ConfirmModal from "./components/ConfirmModal";
+import Icon from "./components/Icon";
+import { BTN, BTN_SIZE, CARD, EYEBROW, SPINNER } from "./lib/ui";
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -201,36 +203,27 @@ export default function App() {
   }
 
   // --- Loading ---
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="w-6 h-6 border-2 border-slate-300 border-t-green-600 rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (authLoading) return <FullScreenLoader />;
 
   // --- Not signed in ---
   if (!session) return <LoginPage />;
 
   // --- Profile loading ---
-  if (profileLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="w-6 h-6 border-2 border-slate-300 border-t-green-600 rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (profileLoading) return <FullScreenLoader />;
 
   // --- Profile unavailable ---
   if (!profile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm text-center">
-          <h2 className="text-lg font-bold text-slate-800">
+      <div className="min-h-dvh flex items-center justify-center p-4">
+        <div className={`${CARD} w-full max-w-md p-6 sm:p-8 text-center animate-pop-in`}>
+          <div className="mx-auto w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 ring-1 ring-inset ring-amber-600/15 grid place-items-center">
+            <Icon name="alert" size={22} />
+          </div>
+          <h2 className="mt-4 text-lg font-semibold text-slate-900 tracking-tight">
             Unable to load your profile
           </h2>
 
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="mt-2 text-sm text-slate-600 leading-relaxed">
             {profileError ||
               "Your account profile is unavailable. Please sign in again or contact your administrator."}
           </p>
@@ -246,7 +239,7 @@ export default function App() {
                 );
               }
             }}
-            className="mt-5 w-full rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 transition"
+            className={`${BTN.primary} ${BTN_SIZE.lg} mt-6 w-full`}
           >
             Sign out
           </button>
@@ -261,10 +254,10 @@ export default function App() {
     page === "settings" && !canManageSettings ? "employees" : page;
 
   const navItems = [
-    { id: "employees", label: "Employees", icon: "👥" },
-    { id: "scheduler", label: "Scheduler", icon: "📅" },
+    { id: "employees", label: "Employees", icon: "users" },
+    { id: "scheduler", label: "Scheduler", icon: "calendar" },
     ...(canManageSettings
-      ? [{ id: "settings", label: "Settings", icon: "⚙️" }]
+      ? [{ id: "settings", label: "Settings", icon: "sliders" }]
       : []),
   ];
 
@@ -274,34 +267,36 @@ export default function App() {
     settings: "Settings",
   }[effectivePage];
 
+  const pageIcon = navItems.find((n) => n.id === effectivePage)?.icon || "users";
+
   return (
     <SettingsContext.Provider value={settings}>
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-dvh flex">
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-[2px] md:hidden animate-fade-in"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed md:sticky md:top-0 md:h-screen inset-y-0 left-0 z-50 w-64 flex flex-col transform transition-transform duration-200 ease-out
-          bg-green-50/70 border-r border-green-100
+        className={`fixed md:sticky md:top-0 md:h-dvh inset-y-0 left-0 z-50 w-64 flex flex-col transform transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
+          bg-white border-r border-slate-900/[0.06] ${sidebarOpen ? "shadow-overlay md:shadow-none" : ""}
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
-        <div className="px-5 py-5 border-b border-green-100 flex items-center justify-between">
-          <div className="flex flex-col items-center text-center gap-3 w-full min-w-0">
+        <div className="px-4 pt-5 pb-4 flex items-start justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
             <img
               src="/logo.png"
               alt="Hofileña Medical Centrum"
-              className="w-20 h-20 rounded-full bg-white p-0.5 shrink-0 ring-1 ring-green-100"
+              className="w-12 h-12 rounded-full bg-white p-0.5 shrink-0 ring-1 ring-slate-900/[0.08] shadow-card"
             />
-            <div className="min-w-0 w-full">
-              <h1 className="text-xl font-bold tracking-tight leading-tight text-green-900">
+            <div className="min-w-0">
+              <h1 className="text-[0.9375rem] font-semibold tracking-tight leading-tight text-slate-900">
                 Hofileña Medical Centrum
               </h1>
-              <p className="text-base text-green-700/70 leading-tight mt-0.5">
+              <p className="text-xs text-green-700 font-medium leading-tight mt-1">
                 Employee Scheduler
               </p>
             </div>
@@ -309,27 +304,18 @@ export default function App() {
 
           <button
             onClick={() => setSidebarOpen(false)}
-            className="md:hidden w-8 h-8 grid place-items-center rounded-lg text-green-800 hover:bg-green-100 transition shrink-0"
+            className={`${BTN.ghost} ${BTN_SIZE.iconSm} md:hidden shrink-0 -mr-1`}
             title="Close menu"
             aria-label="Close menu"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <Icon name="x" size={16} strokeWidth={2.5} />
           </button>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 px-3 pt-2 space-y-1" aria-label="Main">
+          <div className={`${EYEBROW} px-3 pb-2`} aria-hidden="true">
+            Workspace
+          </div>
           {navItems.map((item) => {
             const active = effectivePage === item.id;
             return (
@@ -337,48 +323,54 @@ export default function App() {
                 key={item.id}
                 onClick={() => goToPage(item.id)}
                 aria-current={active ? "page" : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition ${
+                className={`group w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm font-medium transition-colors ${
                   active
-                    ? "bg-green-600 text-white shadow-sm shadow-green-200"
-                    : "text-green-900/80 hover:bg-green-100/70 hover:text-green-900"
+                    ? "bg-green-50 text-green-800 ring-1 ring-inset ring-green-600/15"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                 }`}
               >
-                <span className="text-base" aria-hidden="true">{item.icon}</span>
+                <Icon
+                  name={item.icon}
+                  size={18}
+                  className={
+                    active
+                      ? "text-green-600"
+                      : "text-slate-400 group-hover:text-slate-600 transition-colors"
+                  }
+                />
                 {item.label}
+                {active && (
+                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-green-600" aria-hidden="true" />
+                )}
               </button>
             );
           })}
         </nav>
 
         {/* Footer: signed in as + role + sign out */}
-        <div className="p-3 border-t border-green-100 space-y-2">
-          <div className="px-3 py-2">
-            <p className="text-[10px] uppercase tracking-wider text-green-800/60 font-semibold">
-              Signed in as
-            </p>
-            <p className="text-xs text-green-900 truncate">{profile.email}</p>
-            <p className="text-[10px] text-green-700/70 mt-0.5">
-              {ROLE_LABELS[role] || role}
-            </p>
+        <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-slate-100 space-y-1.5">
+          <div className="flex items-center gap-3 px-2 py-2">
+            <div
+              className="w-9 h-9 rounded-full bg-gradient-to-br from-green-500 to-green-700 text-white text-sm font-semibold grid place-items-center shrink-0 uppercase"
+              aria-hidden="true"
+            >
+              {(profile.email || "?").charAt(0)}
+            </div>
+            <div className="min-w-0">
+              <p className="sr-only">Signed in as</p>
+              <p className="text-xs font-medium text-slate-900 truncate">{profile.email}</p>
+              <p className="mt-0.5">
+                <span className="inline-flex items-center text-[0.625rem] uppercase tracking-wider font-semibold text-green-800 bg-green-50 ring-1 ring-inset ring-green-600/15 rounded-full px-1.5 py-0.5">
+                  {ROLE_LABELS[role] || role}
+                </span>
+              </p>
+            </div>
           </div>
           <button
             onClick={() => setConfirmSignOut(true)}
-            className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg text-green-800 hover:bg-green-100/70 transition"
+            className={`${BTN.ghost} ${BTN_SIZE.md} w-full justify-start px-3`}
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
+            <Icon name="logout" size={16} />
             Sign out
           </button>
         </div>
@@ -386,97 +378,32 @@ export default function App() {
 
       {/* Main content */}
       <main className="flex-1 min-w-0 flex flex-col">
-        <header className="bg-white/80 backdrop-blur border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 flex items-center gap-4 sticky top-0 z-30">
+        <header className="sticky top-0 z-30 h-14 sm:h-16 lg:h-[4.5rem] bg-white/80 backdrop-blur-md border-b border-slate-900/[0.06] px-3 sm:px-4 md:px-6 flex items-center gap-2 sm:gap-3">
           {/* Hamburger (mobile) */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="md:hidden w-9 h-9 grid place-items-center rounded-xl text-slate-600 hover:bg-slate-100 transition shrink-0"
+            className={`${BTN.ghost} ${BTN_SIZE.icon} md:hidden shrink-0`}
             title="Open menu"
             aria-label="Open menu"
             aria-expanded={sidebarOpen}
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
+            <Icon name="menu" size={20} strokeWidth={2.25} />
           </button>
 
           {/* Page title block */}
           <div className="flex items-center gap-3 min-w-0">
-            {/* Icon in a soft green badge */}
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-green-700 grid place-items-center shrink-0 shadow-sm shadow-green-200">
-              {effectivePage === "employees" ? (
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="white"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-              ) : effectivePage === "settings" ? (
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="white"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="4" y1="21" x2="4" y2="14" />
-                  <line x1="4" y1="10" x2="4" y2="3" />
-                  <line x1="12" y1="21" x2="12" y2="12" />
-                  <line x1="12" y1="8" x2="12" y2="3" />
-                  <line x1="20" y1="21" x2="20" y2="16" />
-                  <line x1="20" y1="12" x2="20" y2="3" />
-                  <line x1="1" y1="14" x2="7" y2="14" />
-                  <line x1="9" y1="8" x2="15" y2="8" />
-                  <line x1="17" y1="16" x2="23" y2="16" />
-                </svg>
-              ) : (
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="white"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-              )}
+            <div
+              className="hidden sm:grid w-10 h-10 rounded-xl bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/15 place-items-center shrink-0"
+              aria-hidden="true"
+            >
+              <Icon name={pageIcon} size={20} />
             </div>
 
-            {/* Text */}
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold leading-tight">
+              <p className="text-[0.625rem] uppercase tracking-[0.12em] text-slate-400 font-semibold leading-tight truncate">
                 Hofileña Medical Centrum
               </p>
-              <h2 className="text-lg md:text-xl font-bold text-slate-800 leading-tight truncate">
+              <h2 className="text-lg md:text-xl font-semibold text-slate-900 tracking-tight leading-tight truncate">
                 {pageTitle}
               </h2>
             </div>
@@ -529,22 +456,7 @@ export default function App() {
         confirmLabel="Yes, sign out"
         cancelLabel="Stay"
         variant="warning"
-        icon={
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-        }
+        icon={<Icon name="logout" size={22} strokeWidth={2.25} />}
         onConfirm={async () => {
           setConfirmSignOut(false);
 
@@ -567,5 +479,18 @@ export default function App() {
       />
     </div>
     </SettingsContext.Provider>
+  );
+}
+
+function FullScreenLoader() {
+  return (
+    <div className="min-h-dvh flex flex-col items-center justify-center gap-5">
+      <img
+        src="/logo.png"
+        alt=""
+        className="w-14 h-14 rounded-full bg-white p-0.5 ring-1 ring-slate-900/[0.08] shadow-raised"
+      />
+      <span className={`${SPINNER} w-5 h-5`} role="status" aria-label="Loading" />
+    </div>
   );
 }

@@ -2,37 +2,43 @@ import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { STATUS_MAP } from "../lib/statuses";
 import { shiftsForDepartment, useSettings } from "../lib/settings";
 import { handleMenuKeyDown } from "../lib/useDialog";
+import Icon from "./Icon";
 
 // Fixed large sizes for readability
 const SIZES = {
   empW: 280,
-  dayW: 92,
-  summaryW: 100,
-  cellH: 68,
-  cellText: "text-base",
-  nameText: "text-lg",
-  metaText: "text-sm",
-  dayNum: "text-lg",
-  dayNumCircle: "w-11 h-11",
-  weekday: "text-sm",
-  summaryText: "text-lg",
-  totalText: "text-lg",
-};
-
-// Phones: narrower name column and cells so several days fit on screen.
-const COMPACT_SIZES = {
-  empW: 136,
-  dayW: 54,
-  summaryW: 64,
-  cellH: 48,
-  cellText: "text-sm",
-  nameText: "text-sm",
-  metaText: "text-[11px]",
-  dayNum: "text-sm",
-  dayNumCircle: "w-8 h-8",
-  weekday: "text-[10px]",
+  dayW: 88,
+  summaryW: 96,
+  cellH: 56,
+  cellPad: "p-1",
+  cellRadius: "rounded-[10px]",
+  cellText: "text-[0.9375rem]",
+  nameText: "text-base",
+  metaText: "text-xs",
+  dayNum: "text-base",
+  dayNumCircle: "w-9 h-9",
+  weekday: "text-[0.6875rem]",
   summaryText: "text-base",
   totalText: "text-base",
+};
+
+// Phones: narrower name column and cells so ~5 days fit on screen, while
+// each cell stays a comfortable ≥44px touch target.
+const COMPACT_SIZES = {
+  empW: 124,
+  dayW: 52,
+  summaryW: 60,
+  cellH: 44,
+  cellPad: "p-[3px]",
+  cellRadius: "rounded-lg",
+  cellText: "text-[0.8125rem]",
+  nameText: "text-[0.8125rem]",
+  metaText: "text-[0.6875rem]",
+  dayNum: "text-sm",
+  dayNumCircle: "w-7 h-7",
+  weekday: "text-[0.625rem]",
+  summaryText: "text-sm",
+  totalText: "text-sm",
 };
 
 const COMPACT_QUERY = "(max-width: 639px)";
@@ -41,6 +47,13 @@ const SHORT_MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
+
+// Edge shadows on the pinned column/header, shown once the grid has scrolled
+// (the scroll handler toggles data-sx / data-sy on the scroll container).
+const NAME_SHADOW =
+  "group-data-[sx]/grid:shadow-[8px_0_12px_-8px_rgb(15_23_42/0.18)]";
+const HEAD_SHADOW =
+  "group-data-[sy]/grid:shadow-[0_8px_12px_-8px_rgb(15_23_42/0.14)]";
 
 function useMediaQuery(query) {
   const [matches, setMatches] = useState(
@@ -57,10 +70,31 @@ function useMediaQuery(query) {
   return matches;
 }
 
+function useElementWidth(ref) {
+  const [width, setWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setWidth(el.clientWidth);
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+
+  return width;
+}
+
 // "Mon, Oct 12" — for screen-reader labels
 function spokenDate(d) {
   const [, m, day] = d.iso.split("-").map(Number);
   return `${d.weekday}, ${SHORT_MONTHS[m - 1]} ${day}`;
+}
+
+function onGridScroll(e) {
+  const el = e.currentTarget;
+  el.toggleAttribute("data-sx", el.scrollLeft > 1);
+  el.toggleAttribute("data-sy", el.scrollTop > 1);
 }
 
 export default function ScheduleGrid({
@@ -73,12 +107,21 @@ export default function ScheduleGrid({
   const compact = useMediaQuery(COMPACT_QUERY);
   const settings = useSettings();
   const z = compact ? COMPACT_SIZES : SIZES;
+  const paneRef = useRef(null);
+  const paneWidth = useElementWidth(paneRef);
 
-  // Summary columns pin to the right edge on wider screens. On phones only
-  // the name column stays pinned, otherwise there's no room left for days.
+  // Summary columns pin to the right edge when the pane is wide enough to
+  // still show a few days between them and the pinned name column (not on
+  // phones or narrow tablets, where they'd cover every day).
   // `slot` counts from the right: Total = 0, Off = 1, Present = 2, IL = 3.
+  const pinSummary =
+    !compact && paneWidth >= z.empW + 4 * z.summaryW + 4 * z.dayW;
   const pinRight = (slot) =>
-    compact ? undefined : { position: "sticky", right: slot * z.summaryW };
+    pinSummary ? { position: "sticky", right: slot * z.summaryW } : undefined;
+  // Divider + shadow where the pinned summary block starts.
+  const pinEdge = pinSummary
+    ? "border-l border-slate-200 shadow-[-8px_0_12px_-8px_rgb(15_23_42/0.12)]"
+    : "border-l border-slate-200";
 
   const lookup = {};
   for (const s of schedules) {
@@ -111,15 +154,41 @@ export default function ScheduleGrid({
   }
   const grandTotal = grandPresent;
 
+  // Day column styling shared by header, body and footer.
+  const isWeekend = (d) => d.weekday === "Sat" || d.weekday === "Sun";
+  // A stronger rule after Sunday groups the period into weeks.
+  const dayBorder = (d) =>
+    d.weekday === "Sun" ? "border-r border-slate-200" : "border-r border-slate-100";
+
+  // The grid scrolls inside its own pane so the day header, name column and
+  // manpower footer stay pinned. Heights leave room for the app header (and,
+  // on phones while editing, the bottom save bar).
+  const paneHeight = readOnly
+    ? "max-h-[calc(100dvh-4.5rem)]"
+    : "max-h-[calc(100dvh-9.5rem)]";
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 overflow-hidden">
+    <div className="-mx-4 sm:mx-0 bg-white border-y border-slate-900/[0.07] sm:border-0 sm:rounded-2xl sm:ring-1 sm:ring-slate-900/[0.06] shadow-card overflow-hidden">
       <div
-        className="overflow-x-auto overscroll-x-contain focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-green-500"
+        ref={paneRef}
+        className={`group/grid overflow-auto overscroll-x-contain scroll-thin ${paneHeight} sm:max-h-[calc(100dvh-6rem)] lg:max-h-[calc(100dvh-12rem)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-green-600`}
         role="region"
         aria-label="Schedule grid"
         tabIndex={0}
+        onScroll={onGridScroll}
+        // Keyboard focus never lands under the pinned name column/header.
+        style={{ scrollPaddingLeft: z.empW, scrollPaddingTop: compact ? 56 : 72 }}
       >
-        <table className="border-collapse" style={{ minWidth: "100%" }}>
+        {/* Fixed layout with an explicit width so columns keep their sizes
+            (auto layout squeezes them to fit, breaking the pinned columns). */}
+        <table
+          className="border-separate border-spacing-0"
+          style={{
+            minWidth: "100%",
+            width: z.empW + days.length * z.dayW + 4 * z.summaryW,
+            tableLayout: "fixed",
+          }}
+        >
           <colgroup>
             <col style={{ width: z.empW }} />
             {days.map((d) => (
@@ -135,37 +204,41 @@ export default function ScheduleGrid({
             <tr>
               <th
                 scope="col"
-                className="sticky left-0 z-20 bg-slate-50 border-b border-r border-slate-200 px-2 sm:px-3 py-2 text-left"
+                className={`sticky left-0 top-0 z-30 bg-white border-b border-r border-slate-200 px-3 sm:px-4 py-2 text-left align-bottom ${NAME_SHADOW}`}
               >
-                <span className="text-[10px] sm:text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                <span className="text-[0.625rem] sm:text-[0.6875rem] uppercase tracking-[0.08em] text-slate-500 font-semibold">
                   Employee
                 </span>
               </th>
 
               {days.map((d) => {
-                const isWeekend = d.weekday === "Sat" || d.weekday === "Sun";
+                const weekend = isWeekend(d);
                 const isToday = d.iso === todayIso;
                 return (
                   <th
                     key={d.iso}
                     scope="col"
                     aria-label={spokenDate(d)}
-                    className={`border-b border-r border-slate-200 px-0.5 py-1.5 text-center ${
-                      isWeekend ? "bg-slate-100" : "bg-slate-50"
+                    className={`sticky top-0 z-20 border-b border-slate-200 ${dayBorder(d)} px-0.5 py-1.5 sm:py-2 text-center ${HEAD_SHADOW} ${
+                      isToday ? "bg-green-50" : weekend ? "bg-slate-50" : "bg-white"
                     }`}
                   >
                     <div
-                      className={`${z.weekday} uppercase tracking-wide ${
-                        isWeekend ? "text-rose-400" : "text-slate-400"
+                      className={`${z.weekday} uppercase tracking-[0.06em] font-semibold leading-none ${
+                        isToday
+                          ? "text-green-700"
+                          : weekend
+                            ? "text-rose-500"
+                            : "text-slate-400"
                       }`}
                     >
                       {d.weekday}
                     </div>
                     <div
-                      className={`mx-auto mt-0.5 ${z.dayNumCircle} grid place-items-center rounded-full font-bold ${z.dayNum} ${
+                      className={`mx-auto mt-1 ${z.dayNumCircle} grid place-items-center rounded-full font-semibold tabular-nums ${z.dayNum} ${
                         isToday
-                          ? "bg-green-600 text-white shadow"
-                          : "text-slate-700"
+                          ? "bg-green-600 text-white shadow-brand"
+                          : "text-slate-800"
                       }`}
                     >
                       {d.day}
@@ -176,9 +249,9 @@ export default function ScheduleGrid({
               <th
                 scope="col"
                 style={pinRight(3)}
-                className="z-20 bg-emerald-50 border-b border-r border-slate-200 px-1 py-2 text-center"
+                className={`sticky top-0 z-30 bg-emerald-50 border-b border-r border-slate-200 ${pinEdge} px-1 py-2 text-center ${HEAD_SHADOW}`}
               >
-                <div className="text-[10px] uppercase tracking-wider text-emerald-800 font-bold leading-tight">
+                <div className="text-[0.625rem] uppercase tracking-wide text-emerald-800 font-semibold leading-tight">
                   Incentive
                   <br />
                   Leave
@@ -187,9 +260,9 @@ export default function ScheduleGrid({
               <th
                 scope="col"
                 style={pinRight(2)}
-                className="z-20 bg-emerald-50 border-b border-r border-slate-200 px-1 py-2 text-center"
+                className={`sticky top-0 z-30 bg-green-50 border-b border-r border-slate-200 px-1 py-2 text-center ${HEAD_SHADOW}`}
               >
-                <div className="text-[10px] uppercase tracking-wider text-emerald-700 font-bold leading-tight">
+                <div className="text-[0.625rem] uppercase tracking-wide text-green-800 font-semibold leading-tight">
                   Physical
                   <br />
                   Present
@@ -198,9 +271,9 @@ export default function ScheduleGrid({
               <th
                 scope="col"
                 style={pinRight(1)}
-                className="z-20 bg-rose-50 border-b border-r border-slate-200 px-1 py-2 text-center"
+                className={`sticky top-0 z-30 bg-rose-50 border-b border-r border-slate-200 px-1 py-2 text-center ${HEAD_SHADOW}`}
               >
-                <div className="text-[10px] uppercase tracking-wider text-rose-700 font-bold leading-tight">
+                <div className="text-[0.625rem] uppercase tracking-wide text-rose-700 font-semibold leading-tight">
                   Physical
                   <br />
                   Off
@@ -209,9 +282,9 @@ export default function ScheduleGrid({
               <th
                 scope="col"
                 style={pinRight(0)}
-                className="z-20 bg-slate-100 border-b border-slate-200 px-1 py-2 text-center"
+                className={`sticky top-0 z-30 bg-slate-100 border-b border-slate-200 px-1 py-2 text-center ${HEAD_SHADOW}`}
               >
-                <div className="text-[10px] uppercase tracking-wider text-slate-700 font-bold leading-tight">
+                <div className="text-[0.625rem] uppercase tracking-wide text-slate-700 font-semibold leading-tight">
                   Total
                   <br />
                   Working Days
@@ -234,27 +307,26 @@ export default function ScheduleGrid({
               const total = present;
 
               // Opaque backgrounds: pinned cells must hide what scrolls beneath.
-              const rowBg = idx % 2 ? "bg-slate-50" : "bg-white";
               const hoverBg = readOnly ? "" : "group-hover:bg-green-50";
               const statuses = shiftsForDepartment(settings, emp.department);
 
               return (
                 <tr
                   key={emp.id}
-                  className={`group ${rowBg} ${
+                  className={`group bg-white ${
                     readOnly ? "" : "hover:bg-green-50/40"
                   } transition-colors`}
                 >
                   <th
                     scope="row"
                     title={emp.name}
-                    className={`sticky left-0 z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-2 sm:px-3 py-2 text-left font-normal transition-colors`}
+                    className={`sticky left-0 z-10 bg-white ${hoverBg} border-b border-r border-slate-100 px-3 sm:px-4 py-1.5 text-left font-normal transition-colors ${NAME_SHADOW}`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       {/* Row number (display only — not the employee number) */}
                       {!compact && (
                         <div
-                          className="w-9 h-9 shrink-0 grid place-items-center rounded-lg bg-green-50 text-green-700 text-sm font-bold tabular-nums ring-1 ring-green-100"
+                          className="w-6 shrink-0 text-right text-sm font-medium text-slate-400 tabular-nums"
                           aria-hidden="true"
                         >
                           {idx + 1}
@@ -263,14 +335,14 @@ export default function ScheduleGrid({
 
                       <div className="min-w-0">
                         <div
-                          className={`font-semibold ${z.nameText} text-slate-800 leading-tight ${
+                          className={`font-semibold ${z.nameText} text-slate-900 leading-snug ${
                             compact ? "line-clamp-2 break-words" : "truncate"
                           }`}
                         >
                           {emp.name}
                         </div>
                         <div
-                          className={`${z.metaText} text-slate-500 truncate leading-tight`}
+                          className={`${z.metaText} text-slate-500 truncate leading-tight mt-0.5`}
                         >
                           {emp.role}
                         </div>
@@ -285,18 +357,20 @@ export default function ScheduleGrid({
                     return (
                       <td
                         key={d.iso}
-                        className={`border-b border-r border-slate-200 p-0 align-middle ${
-                          isToday ? "bg-green-50/40" : ""
+                        className={`border-b border-slate-100 ${dayBorder(d)} ${z.cellPad} align-middle ${
+                          isToday ? "bg-green-50/70" : isWeekend(d) ? "bg-slate-50/70" : ""
                         }`}
                       >
                         <CellButton
                           status={status}
-                          isToday={isToday}
                           height={z.cellH}
                           textClass={z.cellText}
+                          radiusClass={z.cellRadius}
                           readOnly={readOnly}
                           statuses={statuses}
                           label={`${emp.name}, ${spokenDate(d)}`}
+                          name={emp.name}
+                          dateText={spokenDate(d)}
                           compact={compact}
                           onChange={(newStatus) =>
                             onSetStatus(emp.id, d.iso, newStatus)
@@ -307,7 +381,7 @@ export default function ScheduleGrid({
                   })}
                   <td
                     style={pinRight(3)}
-                    className={`z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-1 py-2 text-center transition-colors`}
+                    className={`z-10 bg-white ${hoverBg} border-b border-r border-slate-100 ${pinEdge} px-1 py-2 text-center transition-colors`}
                   >
                     <SummaryNumber
                       value={il}
@@ -316,29 +390,29 @@ export default function ScheduleGrid({
                   </td>
                   <td
                     style={pinRight(2)}
-                    className={`z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-1 py-2 text-center transition-colors`}
+                    className={`z-10 bg-white ${hoverBg} border-b border-r border-slate-100 px-1 py-2 text-center transition-colors`}
                   >
                     <SummaryNumber
                       value={present}
-                      className={`text-emerald-700 ${z.summaryText}`}
+                      className={`text-green-700 ${z.summaryText}`}
                     />
                   </td>
                   <td
                     style={pinRight(1)}
-                    className={`z-10 ${rowBg} ${hoverBg} border-b border-r border-slate-200 px-1 py-2 text-center transition-colors`}
+                    className={`z-10 bg-white ${hoverBg} border-b border-r border-slate-100 px-1 py-2 text-center transition-colors`}
                   >
                     <SummaryNumber
                       value={off}
-                      className={`text-rose-700 ${z.summaryText}`}
+                      className={`text-rose-600 ${z.summaryText}`}
                     />
                   </td>
                   <td
                     style={pinRight(0)}
-                    className="z-10 bg-slate-50 border-b border-slate-200 px-1 py-2 text-center"
+                    className="z-10 bg-slate-50 border-b border-slate-100 px-1 py-2 text-center"
                   >
                     <SummaryNumber
                       value={total}
-                      className={`text-slate-800 ${z.summaryText}`}
+                      className={`text-slate-900 ${z.summaryText}`}
                     />
                   </td>
                 </tr>
@@ -346,39 +420,25 @@ export default function ScheduleGrid({
             })}
           </tbody>
 
-          {/* ---------- TOTAL MANPOWER FOOTER ---------- */}
+          {/* ---------- TOTAL MANPOWER FOOTER (pinned to the bottom) ---------- */}
           <tfoot>
             <tr>
               <th
                 scope="row"
-                className="sticky left-0 z-20 bg-green-50 border-t-2 border-green-200 border-r border-slate-200 px-2 sm:px-3 py-2.5 text-left font-normal"
+                className={`sticky left-0 bottom-0 z-30 bg-green-50 border-t border-green-200 border-r border-r-slate-200 px-3 sm:px-4 py-2 sm:py-2.5 text-left font-normal ${NAME_SHADOW}`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   <div
-                    className="hidden sm:grid w-6 h-6 rounded-md bg-green-600 text-white place-items-center shadow-sm shrink-0"
+                    className="hidden sm:grid w-7 h-7 rounded-lg bg-green-600 text-white place-items-center shadow-brand shrink-0"
                     aria-hidden="true"
                   >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                      <circle cx="9" cy="7" r="4" />
-                      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                    </svg>
+                    <Icon name="users" size={14} strokeWidth={2.5} />
                   </div>
                   <div>
-                    <div className="text-[11px] uppercase tracking-wider text-green-700 font-bold leading-tight">
+                    <div className="text-[0.6875rem] uppercase tracking-[0.06em] text-green-800 font-bold leading-tight">
                       Total manpower
                     </div>
-                    <div className="text-[10px] text-green-600 leading-tight">
+                    <div className="text-[0.625rem] text-green-700/80 leading-tight">
                       of the day
                     </div>
                   </div>
@@ -391,13 +451,13 @@ export default function ScheduleGrid({
                 return (
                   <td
                     key={d.iso}
-                    className={`border-t-2 border-green-200 border-r border-slate-200 py-2 text-center ${
-                      isToday ? "bg-green-100" : "bg-green-50/70"
+                    className={`sticky bottom-0 z-20 border-t border-green-200 ${dayBorder(d)} py-2 text-center ${
+                      isToday ? "bg-green-100" : "bg-green-50"
                     }`}
                   >
                     <span
-                      className={`font-bold ${z.totalText} ${
-                        count > 0 ? "text-green-700" : "text-green-300"
+                      className={`font-bold tabular-nums ${z.totalText} ${
+                        count > 0 ? "text-green-800" : "text-green-300"
                       }`}
                     >
                       {count}
@@ -407,33 +467,33 @@ export default function ScheduleGrid({
               })}
               <td
                 style={pinRight(3)}
-                className="z-20 bg-emerald-50 border-t-2 border-green-200 border-r border-slate-200 py-2 text-center"
+                className={`sticky bottom-0 z-30 bg-emerald-50 border-t border-green-200 border-r border-r-slate-200 ${pinEdge} py-2 text-center`}
               >
-                <span className={`font-bold text-emerald-800 ${z.totalText}`}>
+                <span className={`font-bold tabular-nums text-emerald-800 ${z.totalText}`}>
                   {grandIL}
                 </span>
               </td>
               <td
                 style={pinRight(2)}
-                className="z-20 bg-emerald-50 border-t-2 border-green-200 border-r border-slate-200 py-2 text-center"
+                className="sticky bottom-0 z-30 bg-green-50 border-t border-green-200 border-r border-r-slate-200 py-2 text-center"
               >
-                <span className={`font-bold text-emerald-700 ${z.totalText}`}>
+                <span className={`font-bold tabular-nums text-green-800 ${z.totalText}`}>
                   {grandPresent}
                 </span>
               </td>
               <td
                 style={pinRight(1)}
-                className="z-20 bg-rose-50 border-t-2 border-green-200 border-r border-slate-200 py-2 text-center"
+                className="sticky bottom-0 z-30 bg-rose-50 border-t border-green-200 border-r border-r-slate-200 py-2 text-center"
               >
-                <span className={`font-bold text-rose-700 ${z.totalText}`}>
+                <span className={`font-bold tabular-nums text-rose-700 ${z.totalText}`}>
                   {grandOff}
                 </span>
               </td>
               <td
                 style={pinRight(0)}
-                className="z-20 bg-slate-100 border-t-2 border-green-200 py-2 text-center"
+                className="sticky bottom-0 z-30 bg-slate-100 border-t border-green-200 py-2 text-center"
               >
-                <span className={`font-bold text-slate-700 ${z.totalText}`}>
+                <span className={`font-bold tabular-nums text-slate-800 ${z.totalText}`}>
                   {grandTotal}
                 </span>
               </td>
@@ -447,20 +507,24 @@ export default function ScheduleGrid({
 
 /* ---- Summary cell ---- */
 function SummaryNumber({ value, className }) {
-  return (
-    <span className={`font-bold ${className}`}>{value > 0 ? value : "—"}</span>
+  return value > 0 ? (
+    <span className={`font-semibold tabular-nums ${className}`}>{value}</span>
+  ) : (
+    <span className="font-semibold text-slate-300">—</span>
   );
 }
 
 /* ---- Cell button ---- */
 function CellButton({
   status,
-  isToday,
   height,
   textClass,
+  radiusClass,
   readOnly,
   statuses,
   label,
+  name,
+  dateText,
   compact,
   onChange,
 }) {
@@ -474,10 +538,12 @@ function CellButton({
   }
 
   const look = current
-    ? `${current.classes} shadow-sm`
+    ? `${current.classes} shadow-[inset_0_0_0_1px_rgb(15_23_42/0.06)] ${
+        readOnly ? "" : "hover:shadow-[inset_0_0_0_2px_rgb(15_23_42/0.16)]"
+      }`
     : readOnly
-      ? "bg-white text-slate-300"
-      : "bg-white text-slate-300 hover:bg-slate-100 hover:text-slate-500";
+      ? "text-slate-300"
+      : "border border-dashed border-slate-200 text-slate-300 hover:border-green-400 hover:bg-green-50 hover:text-green-600";
 
   return (
     <>
@@ -492,22 +558,25 @@ function CellButton({
         aria-label={`${label}: ${current?.label || "No shift"}`}
         aria-haspopup={readOnly ? undefined : "menu"}
         aria-expanded={readOnly ? undefined : open}
-        className={`w-full ${textClass} font-bold tracking-wide transition-all duration-150 ${
-          readOnly ? "cursor-default select-none" : "active:scale-95"
-        } ${look} ${isToday ? "ring-2 ring-inset ring-green-300" : ""}`}
+        className={`w-full grid place-items-center ${radiusClass} ${textClass} font-bold tracking-tight leading-none transition-[transform,box-shadow,background-color,border-color,color] duration-150 ${
+          readOnly ? "cursor-default select-none" : "active:scale-[0.94]"
+        } ${look} ${open ? "ring-2 ring-green-600 ring-offset-1" : ""}`}
         title={
           readOnly
             ? current?.label || "Preview only"
             : current?.label || "Click to set"
         }
       >
-        {status || "—"}
+        {status ||
+          (readOnly ? "—" : <Icon name="plus" size={compact ? 14 : 16} strokeWidth={2.5} />)}
       </button>
 
       {!readOnly && open && (
         <Popup
           anchorRef={btnRef}
           label={label}
+          name={name}
+          dateText={dateText}
           current={status}
           statuses={statuses}
           compact={compact}
@@ -525,8 +594,9 @@ function CellButton({
 /* ---- Popup ----
    Desktop: floats next to the cell, measured after render and clamped to the
    viewport (scrolls internally if taller than the screen).
-   Phones: a bottom sheet, so it can never hang off the side. */
-function Popup({ anchorRef, label, current, statuses, compact, onClose, onPick }) {
+   Phones: a bottom sheet with large two-column tiles, so it can never hang
+   off the side and every option is an easy thumb target. */
+function Popup({ anchorRef, label, name, dateText, current, statuses, compact, onClose, onPick }) {
   const ref = useRef(null);
   const [style, setStyle] = useState({ visibility: "hidden" });
 
@@ -575,10 +645,12 @@ function Popup({ anchorRef, label, current, statuses, compact, onClose, onPick }
     )?.focus();
   }, []);
 
+  const currentShift = current ? STATUS_MAP[current] : null;
+
   return (
     <>
       <div
-        className={`fixed inset-0 z-40 ${compact ? "bg-slate-900/30" : ""}`}
+        className={`fixed inset-0 z-40 ${compact ? "bg-slate-950/40 animate-fade-in" : ""}`}
         onClick={() => onClose(false)}
       />
       <div
@@ -588,60 +660,106 @@ function Popup({ anchorRef, label, current, statuses, compact, onClose, onPick }
         onKeyDown={(e) => handleMenuKeyDown(e, ref.current, onClose)}
         className={
           compact
-            ? "fixed z-50 inset-x-0 bottom-0 max-h-[75dvh] overflow-y-auto bg-white rounded-t-2xl shadow-2xl ring-1 ring-slate-200 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
-            : "fixed z-50 w-72 max-w-[calc(100vw-16px)] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl p-2"
+            ? "fixed z-50 inset-x-0 bottom-0 max-h-[82dvh] overflow-y-auto overscroll-contain bg-white rounded-t-3xl shadow-overlay animate-sheet-up pb-[max(1rem,env(safe-area-inset-bottom))]"
+            : "fixed z-50 w-80 max-w-[calc(100vw-16px)] overflow-y-auto overscroll-contain scroll-thin bg-white rounded-2xl shadow-overlay p-1.5 animate-pop-in"
         }
         style={compact ? undefined : style}
       >
         {compact && (
-          <div className="mx-auto mb-1 h-1 w-10 rounded-full bg-slate-200" aria-hidden="true" />
-        )}
-        <div className="px-3 py-1.5" aria-hidden="true">
-          <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-            Set shift
+          <div className="pt-2.5 pb-1" aria-hidden="true">
+            <div className="mx-auto h-1.5 w-10 rounded-full bg-slate-200" />
           </div>
-          <div className="text-xs text-slate-500 truncate">{label}</div>
+        )}
+
+        <div
+          className={compact ? "px-5 pt-2 pb-4 flex items-start gap-3" : "px-3 pt-2 pb-2"}
+          aria-hidden="true"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-[0.6875rem] uppercase tracking-[0.08em] text-slate-400 font-semibold">
+              Set shift · {dateText}
+            </div>
+            <div
+              className={`font-semibold text-slate-900 truncate ${compact ? "text-base mt-0.5" : "text-sm"}`}
+            >
+              {name}
+            </div>
+          </div>
+          {compact && currentShift && (
+            <span
+              className={`shrink-0 mt-1 inline-flex items-center h-7 px-2.5 rounded-lg text-xs font-bold ${currentShift.classes}`}
+            >
+              {currentShift.code}
+            </span>
+          )}
         </div>
 
-        {statuses.map((s) => (
-          <button
-            key={s.code}
-            type="button"
-            role="menuitemradio"
-            aria-checked={current === s.code}
-            onClick={() => onPick(s.code)}
-            className={`w-full flex items-start gap-3 px-3 py-2.5 text-sm rounded-xl hover:bg-slate-100 focus:bg-slate-100 focus:outline-none transition text-left ${
-              current === s.code ? "ring-1 ring-inset ring-green-300 bg-green-50/60" : ""
-            }`}
-          >
-            <span
-              className={`min-w-[52px] h-9 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 ${s.classes}`}
-            >
-              {s.code}
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-slate-800 font-medium truncate">
-                {s.label}
-              </span>
-              {s.time && (
-                <span className="block text-[11px] text-slate-500 mt-0.5">
-                  {s.time}
+        <div className={compact ? "grid grid-cols-2 gap-2 px-4" : "space-y-0.5"}>
+          {statuses.map((s) => {
+            const selected = current === s.code;
+            return (
+              <button
+                key={s.code}
+                type="button"
+                role="menuitemradio"
+                aria-checked={selected}
+                onClick={() => onPick(s.code)}
+                className={
+                  compact
+                    ? `relative flex flex-col items-start gap-2 p-3 rounded-2xl text-left transition active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-green-600 ${
+                        selected
+                          ? "bg-green-50 ring-2 ring-green-600"
+                          : "bg-white ring-1 ring-slate-200"
+                      }`
+                    : `w-full flex items-center gap-3 px-2.5 py-2 text-sm rounded-xl text-left transition-colors focus:outline-none hover:bg-slate-100 focus:bg-slate-100 ${
+                        selected ? "bg-green-50 hover:bg-green-50 focus:bg-green-100" : ""
+                      }`
+                }
+              >
+                <span
+                  className={`min-w-[3rem] h-8 px-2 rounded-lg text-xs font-bold tracking-tight flex items-center justify-center shrink-0 shadow-[inset_0_0_0_1px_rgb(15_23_42/0.06)] ${s.classes}`}
+                >
+                  {s.code}
                 </span>
-              )}
-            </span>
+                <span className="flex-1 min-w-0 w-full">
+                  <span className="block text-sm text-slate-900 font-medium truncate">
+                    {s.label}
+                  </span>
+                  <span className="block text-xs text-slate-500 mt-0.5 truncate">
+                    {s.time || " "}
+                  </span>
+                </span>
+                {selected && (
+                  <span
+                    className={
+                      compact
+                        ? "absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-green-600 text-white grid place-items-center"
+                        : "text-green-600 shrink-0"
+                    }
+                  >
+                    <Icon name="check" size={compact ? 12 : 16} strokeWidth={3} />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className={compact ? "px-4 pt-3" : "mt-1 pt-1 border-t border-slate-100"}>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => onPick(null)}
+            className={
+              compact
+                ? "w-full h-12 inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-50 text-rose-700 text-sm font-semibold active:scale-[0.98] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                : "w-full flex items-center gap-2 text-left px-3 py-2.5 text-sm rounded-xl hover:bg-rose-50 focus:bg-rose-50 focus:outline-none text-rose-600 font-medium transition-colors"
+            }
+          >
+            <Icon name="trash" size={15} />
+            Clear
           </button>
-        ))}
-
-        <div className="my-1.5 border-t border-slate-100" />
-
-        <button
-          type="button"
-          role="menuitem"
-          onClick={() => onPick(null)}
-          className="w-full text-left px-3 py-2.5 text-sm rounded-xl hover:bg-rose-50 focus:bg-rose-50 focus:outline-none text-rose-600 font-medium transition"
-        >
-          Clear
-        </button>
+        </div>
       </div>
     </>
   );

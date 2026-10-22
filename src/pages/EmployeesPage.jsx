@@ -8,8 +8,18 @@ import { canManageEmployees } from "../lib/auth";
 import { friendlyError } from "../lib/errors";
 import { buildFullName } from "../lib/format";
 import { handleMenuKeyDown } from "../lib/useDialog";
+import Icon from "../components/Icon";
+import {
+  BTN,
+  BTN_SIZE,
+  CARD,
+  INPUT,
+  MENU,
+  MENU_HEADING,
+  MENU_ITEM,
+} from "../lib/ui";
 
-const DEPT_BADGE = "bg-slate-100 text-slate-700 ring-slate-200";
+const DEPT_BADGE = "bg-slate-50 text-slate-700 ring-slate-900/10";
 
 // "DELA CRUZ, JUAN S."
 function displayName(e) {
@@ -127,26 +137,26 @@ export default function EmployeesPage({ role }) {
       <ErrorBanner message={error} onDismiss={() => setError("")} />
 
       {canManage && (
-  <EmployeeForm
-    open={formOpen}
-    editing={editing}
-    onDone={() => {
-      closeForm();
-      loadEmployees();
-    }}
-    onCancel={closeForm}
-  />
-)}
+        <EmployeeForm
+          open={formOpen}
+          editing={editing}
+          onDone={() => {
+            closeForm();
+            loadEmployees();
+          }}
+          onCancel={closeForm}
+        />
+      )}
 
-      <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200">
+      <div className={CARD}>
         {/* Header */}
-        <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           <div>
-            <h2 className="text-base font-semibold text-slate-800">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900 tracking-tight">
               Team directory
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {employees.length}{" "}
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+              <span className="tabular-nums">{employees.length}</span>{" "}
               {employees.length === 1 ? "employee" : "employees"} registered
             </p>
           </div>
@@ -154,27 +164,18 @@ export default function EmployeesPage({ role }) {
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
             {/* Search */}
             <div className="relative flex-1 sm:flex-initial">
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+              <Icon
+                name="search"
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search…"
+                placeholder="Search name, number or role…"
                 aria-label="Search employees by name, number or role"
                 type="search"
-                className="w-full sm:w-56 rounded-xl border border-slate-200 bg-slate-50/60 pl-9 pr-3 py-2.5 sm:py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition"
+                className={`${INPUT} h-10 pl-9 sm:w-72`}
               />
             </div>
 
@@ -182,21 +183,9 @@ export default function EmployeesPage({ role }) {
             {canManage && (
               <button
                 onClick={openAdd}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 active:scale-95 shadow-sm shadow-green-200 transition"
+                className={`${BTN.primary} ${BTN_SIZE.md}`}
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
+                <Icon name="plus" size={16} strokeWidth={2.5} />
                 Add employee
               </button>
             )}
@@ -204,23 +193,23 @@ export default function EmployeesPage({ role }) {
         </div>
 
         {/* Filter row */}
-        <div className="px-4 sm:px-6 py-3 border-b border-slate-100 flex items-center gap-3">
+        <div className="px-4 sm:px-6 pb-4 flex items-center gap-3 border-b border-slate-100">
           <DepartmentFilterDropdown
             value={deptFilter}
             onChange={setDeptFilter}
             counts={counts}
           />
-          <span className="ml-auto text-[11px] text-slate-400 font-medium">
+          <span className="ml-auto text-xs text-slate-500 font-medium whitespace-nowrap tabular-nums">
             Showing {filtered.length} of {employees.length}
           </span>
         </div>
 
         {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto rounded-b-2xl">
+        <div className="hidden md:block overflow-x-auto scroll-thin rounded-b-2xl">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
-              <tr className="bg-slate-50 text-slate-500 text-left text-xs uppercase tracking-wider">
-                <th className="px-6 py-3 font-semibold w-24">Emp. No.</th>
+              <tr className="bg-slate-50/80 text-slate-500 text-left text-[0.6875rem] uppercase tracking-[0.08em]">
+                <th className="px-6 py-3 font-semibold w-28">Emp. No.</th>
                 <th className="px-6 py-3 font-semibold">Employee</th>
                 <th className="px-6 py-3 font-semibold">Department</th>
                 <th className="px-6 py-3 font-semibold">Role</th>
@@ -234,12 +223,8 @@ export default function EmployeesPage({ role }) {
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td
-                    colSpan={canManage ? 5 : 4}
-                    className="px-6 py-12 text-center"
-                  >
-                    <div className="inline-block w-5 h-5 border-2 border-slate-300 border-t-green-600 rounded-full animate-spin" />
-                    <p className="mt-2 text-xs text-slate-500">Loading…</p>
+                  <td colSpan={canManage ? 5 : 4} className="p-0">
+                    <ListSkeleton />
                   </td>
                 </tr>
               )}
@@ -248,7 +233,7 @@ export default function EmployeesPage({ role }) {
                 <tr>
                   <td
                     colSpan={canManage ? 5 : 4}
-                    className="px-6 py-12 text-center"
+                    className="px-6 py-14 text-center"
                   >
                     <EmptyState employees={employees} />
                   </td>
@@ -261,24 +246,29 @@ export default function EmployeesPage({ role }) {
                   return (
                     <tr
                       key={e.id}
-                      className="hover:bg-green-50/40 transition-colors"
+                      className="group hover:bg-slate-50/80 transition-colors"
                     >
-                      <td className="px-6 py-3 text-slate-600 font-mono text-xs tabular-nums">
-                        {e.number || "—"}
+                      <td className="px-6 py-3">
+                        <span className="inline-flex font-mono text-xs tabular-nums text-slate-600 bg-slate-100 rounded-md px-1.5 py-0.5">
+                          {e.number || "—"}
+                        </span>
                       </td>
                       <td className="px-6 py-3">
-                        <div className="font-medium text-slate-800 truncate uppercase">
-                          {full || "—"}
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Avatar employee={e} />
+                          <div className="font-semibold text-slate-900 truncate uppercase">
+                            {full || "—"}
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-3">
                         <span
-                          className={`inline-flex items-center text-xs font-medium rounded-full px-2.5 py-1 ring-1 ${DEPT_BADGE}`}
+                          className={`inline-flex items-center text-xs font-medium rounded-full px-2.5 py-1 ring-1 ring-inset ${DEPT_BADGE}`}
                         >
                           {e.department || "No department"}
                         </span>
                       </td>
-                      <td className="px-6 py-3 text-slate-600 uppercase">
+                      <td className="px-6 py-3 text-slate-600 uppercase text-[0.8125rem]">
                         {e.role}
                       </td>
                       {canManage && (
@@ -299,15 +289,10 @@ export default function EmployeesPage({ role }) {
 
         {/* Mobile cards */}
         <div className="md:hidden divide-y divide-slate-100 rounded-b-2xl overflow-hidden">
-          {loading && (
-            <div className="px-4 py-12 text-center">
-              <div className="inline-block w-5 h-5 border-2 border-slate-300 border-t-green-600 rounded-full animate-spin" />
-              <p className="mt-2 text-xs text-slate-500">Loading…</p>
-            </div>
-          )}
+          {loading && <ListSkeleton />}
 
           {!loading && filtered.length === 0 && (
-            <div className="px-4 py-12 text-center">
+            <div className="px-4 py-14 text-center">
               <EmptyState employees={employees} />
             </div>
           )}
@@ -316,41 +301,45 @@ export default function EmployeesPage({ role }) {
             filtered.map((e) => {
               const full = displayName(e);
               return (
-                <div key={e.id} className="p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-semibold text-slate-800 truncate uppercase">
+                <div key={e.id} className="px-4 py-3.5">
+                  <div className="flex items-start gap-3">
+                    <Avatar employee={e} />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-slate-900 text-[0.9375rem] leading-snug uppercase break-words">
                         {full || "—"}
                       </div>
-                      <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                        {e.number ? `Emp. No. ${e.number}` : "No employee number"}
+                      <div className="mt-0.5 text-xs text-slate-500 uppercase truncate">
+                        {e.role}
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span
+                          className={`inline-flex items-center text-[0.6875rem] font-medium rounded-full px-2 py-0.5 ring-1 ring-inset ${DEPT_BADGE}`}
+                        >
+                          {e.department || "No department"}
+                        </span>
+                        <span className="text-[0.6875rem] text-slate-400 font-mono tabular-nums">
+                          {e.number ? `Emp. No. ${e.number}` : "No employee number"}
+                        </span>
                       </div>
                     </div>
-                    <span
-                      className={`inline-flex shrink-0 items-center text-[10px] font-medium rounded-full px-2 py-1 ring-1 ${DEPT_BADGE}`}
-                    >
-                      {e.department || "No department"}
-                    </span>
-                  </div>
-
-                  <div className="text-xs text-slate-500 uppercase">
-                    {e.role}
                   </div>
 
                   {canManage && (
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex gap-2 mt-3 pl-12">
                       <button
                         onClick={() => openEdit(e)}
                         aria-label={`Edit ${full}`}
-                        className="flex-1 text-xs font-semibold text-green-700 py-2.5 rounded-lg bg-green-50 hover:bg-green-100 transition"
+                        className={`${BTN.tertiary} h-10 px-3 text-xs flex-1`}
                       >
+                        <Icon name="pencil" size={14} />
                         Edit
                       </button>
                       <button
                         onClick={() => setConfirmId(e.id)}
                         aria-label={`Delete ${full}`}
-                        className="flex-1 text-xs font-semibold text-rose-600 py-2.5 rounded-lg bg-rose-50 hover:bg-rose-100 transition"
+                        className={`${BTN.destructiveSoft} h-10 px-3 text-xs flex-1`}
                       >
+                        <Icon name="trash" size={14} />
                         Delete
                       </button>
                     </div>
@@ -382,6 +371,40 @@ export default function EmployeesPage({ role }) {
         onConfirm={() => handleDelete(confirmId)}
         onCancel={() => setConfirmId(null)}
       />
+    </div>
+  );
+}
+
+/* ------------------ Avatar (initials, decorative) ------------------ */
+function Avatar({ employee: e }) {
+  const initials =
+    `${(e.last_name || "").trim().charAt(0)}${(e.first_name || "").trim().charAt(0)}` ||
+    (e.name || "?").trim().charAt(0);
+  return (
+    <div
+      className="w-9 h-9 shrink-0 rounded-full bg-green-50 text-green-800 ring-1 ring-inset ring-green-600/15 grid place-items-center text-xs font-semibold uppercase tracking-tight"
+      aria-hidden="true"
+    >
+      {initials}
+    </div>
+  );
+}
+
+/* ------------------ Loading skeleton ------------------ */
+function ListSkeleton() {
+  return (
+    <div className="px-4 sm:px-6 py-4 space-y-4" aria-busy="true">
+      <span className="sr-only">Loading…</span>
+      {Array.from({ length: 5 }, (_, i) => (
+        <div key={i} className="flex items-center gap-3 animate-pulse" aria-hidden="true">
+          <div className="w-9 h-9 rounded-full bg-slate-100 shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 rounded-full bg-slate-200/80 w-2/5" />
+            <div className="h-2.5 rounded-full bg-slate-100 w-1/4" />
+          </div>
+          <div className="hidden sm:block h-6 w-24 rounded-full bg-slate-100" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -439,28 +462,18 @@ function DepartmentFilterDropdown({ value, onChange, counts }) {
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Filter by department: ${label}`}
-        className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition w-full sm:w-auto sm:min-w-[220px] justify-between ${
+        className={`inline-flex items-center gap-2 rounded-xl h-10 px-3 text-sm font-medium transition w-full sm:w-auto sm:min-w-[15rem] justify-between bg-white shadow-card ${
           open
-            ? "border-green-500 ring-2 ring-green-100 bg-white"
-            : "border-slate-200 bg-slate-50/60 hover:bg-white"
+            ? "ring-2 ring-green-600"
+            : "ring-1 ring-inset ring-slate-200 hover:ring-slate-300 hover:bg-slate-50"
         }`}
       >
         <span className="flex items-center gap-2 min-w-0">
-          <svg
-            className={isAll ? "text-slate-400" : "text-green-600"}
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 21h18" />
-            <path d="M5 21V7l7-4 7 4v14" />
-            <path d="M9 21v-6h6v6" />
-          </svg>
+          <Icon
+            name="building"
+            size={16}
+            className={`shrink-0 ${isAll ? "text-slate-400" : "text-green-600"}`}
+          />
           <span
             className={`truncate ${
               isAll ? "text-slate-800" : "text-green-700 font-semibold"
@@ -468,26 +481,18 @@ function DepartmentFilterDropdown({ value, onChange, counts }) {
           >
             {label}
           </span>
-          <span className="text-[10px] font-bold rounded-full bg-slate-100 text-slate-600 px-1.5 py-0.5 shrink-0">
+          <span className="text-[0.6875rem] font-semibold rounded-full bg-slate-100 text-slate-600 px-1.5 py-0.5 shrink-0 tabular-nums">
             {activeCount}
           </span>
         </span>
 
-        <svg
-          className={`text-slate-400 shrink-0 transition-transform ${
+        <Icon
+          name="chevronDown"
+          size={16}
+          className={`text-slate-400 shrink-0 transition-transform duration-200 ${
             open ? "rotate-180" : ""
           }`}
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        />
       </button>
 
       {open && (
@@ -496,12 +501,9 @@ function DepartmentFilterDropdown({ value, onChange, counts }) {
           role="listbox"
           aria-label="Filter by department"
           onKeyDown={(e) => handleMenuKeyDown(e, menuRef.current, close)}
-          className="absolute z-50 top-full left-0 mt-2 w-72 max-w-[calc(100vw-2rem)] max-h-[60vh] overflow-y-auto bg-white rounded-2xl shadow-xl ring-1 ring-slate-200 p-1.5"
+          className={`absolute z-50 top-full left-0 mt-2 w-72 max-w-[calc(100vw-2rem)] max-h-[60vh] overflow-y-auto overscroll-contain scroll-thin ${MENU}`}
         >
-          <div
-            className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-slate-400 font-semibold"
-            aria-hidden="true"
-          >
+          <div className={MENU_HEADING} aria-hidden="true">
             Filter by department
           </div>
 
@@ -518,36 +520,29 @@ function DepartmentFilterDropdown({ value, onChange, counts }) {
                   onChange(opt.value);
                   close(true);
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-left transition ${
+                className={`${MENU_ITEM} ${
                   active
-                    ? "bg-green-50 text-green-800"
-                    : "hover:bg-slate-50 text-slate-700"
+                    ? "bg-green-50 text-green-800 focus:bg-green-100"
+                    : "text-slate-700 hover:bg-slate-100 focus:bg-slate-100"
                 }`}
               >
                 <span className="flex-1 truncate font-medium">{opt.label}</span>
                 <span
-                  className={`text-[10px] font-bold rounded-full px-1.5 py-0.5 shrink-0 ${
+                  className={`text-[0.6875rem] font-semibold rounded-full px-1.5 py-0.5 shrink-0 tabular-nums ${
                     active
-                      ? "bg-white text-green-700"
+                      ? "bg-white text-green-700 ring-1 ring-inset ring-green-600/20"
                       : "bg-slate-100 text-slate-600"
                   }`}
                 >
                   {count}
                 </span>
                 {active && (
-                  <svg
+                  <Icon
+                    name="check"
+                    size={16}
+                    strokeWidth={3}
                     className="text-green-600 shrink-0"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
+                  />
                 )}
               </button>
             );
@@ -565,15 +560,17 @@ function RowActions({ name, onEdit, onAskDelete }) {
       <button
         onClick={onEdit}
         aria-label={`Edit ${name}`}
-        className="text-xs font-medium text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-50 transition"
+        className={`${BTN.ghostBrand} ${BTN_SIZE.sm}`}
       >
+        <Icon name="pencil" size={14} />
         Edit
       </button>
       <button
         onClick={onAskDelete}
         aria-label={`Delete ${name}`}
-        className="text-xs font-medium text-rose-600 px-3 py-1.5 rounded-lg hover:bg-rose-50 transition"
+        className={`${BTN.destructiveGhost} ${BTN_SIZE.sm}`}
       >
+        <Icon name="trash" size={14} />
         Delete
       </button>
     </div>
@@ -584,8 +581,10 @@ function RowActions({ name, onEdit, onAskDelete }) {
 function EmptyState({ employees }) {
   return (
     <div>
-      <div className="text-3xl">🗂️</div>
-      <p className="mt-2 text-sm font-medium text-slate-700">
+      <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-50 text-slate-400 ring-1 ring-inset ring-slate-900/[0.06] grid place-items-center">
+        <Icon name={employees.length === 0 ? "folder" : "search"} size={24} strokeWidth={1.75} />
+      </div>
+      <p className="mt-4 text-sm font-semibold text-slate-800">
         {employees.length === 0 ? "No employees yet" : "No results found"}
       </p>
       <p className="text-xs text-slate-500 mt-1">

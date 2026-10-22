@@ -1,5 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { useDialog } from "../lib/useDialog";
+import { BACKDROP, BTN, BTN_SIZE, DIALOG } from "../lib/ui";
+import Icon from "./Icon";
 
 function formatRemaining(ms) {
   const total = Math.max(0, Math.ceil(ms / 1000));
@@ -27,8 +29,8 @@ export default function IdleWarningModal({ open, deadline, onStaySignedIn }) {
   const remaining = deadline ? formatRemaining(deadline - now) : null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-3 sm:p-4">
+      <div className={BACKDROP} />
 
       <div
         ref={dialogRef}
@@ -37,36 +39,28 @@ export default function IdleWarningModal({ open, deadline, onStaySignedIn }) {
         aria-labelledby={titleId}
         aria-describedby={messageId}
         tabIndex={-1}
-        className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl ring-1 ring-slate-200 overflow-hidden focus:outline-none"
+        className={`${DIALOG} max-w-md overflow-hidden rounded-3xl sm:rounded-2xl`}
       >
         <div className="p-5 sm:p-6">
           <div className="flex items-start gap-4">
             <div
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-amber-50 ring-1 ring-amber-100 grid place-items-center shrink-0"
+              className="w-11 h-11 rounded-2xl bg-amber-50 ring-1 ring-inset ring-amber-600/15 text-amber-600 grid place-items-center shrink-0"
               aria-hidden="true"
             >
-              <svg
-                width="22" height="22" viewBox="0 0 24 24"
-                fill="none" stroke="currentColor" strokeWidth="2.5"
-                strokeLinecap="round" strokeLinejoin="round"
-                className="text-amber-600"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
+              <Icon name="clock" size={22} strokeWidth={2.25} />
             </div>
 
-            <div className="flex-1 min-w-0">
-              <h3 id={titleId} className="text-base font-semibold text-slate-800">
+            <div className="flex-1 min-w-0 pt-0.5">
+              <h3 id={titleId} className="text-base font-semibold text-slate-900 tracking-tight">
                 Still there?
               </h3>
-              <p id={messageId} className="text-sm text-slate-500 mt-1">
+              <p id={messageId} className="text-sm text-slate-600 mt-1.5 leading-relaxed">
                 For security, you'll be signed out automatically due to
                 inactivity
                 {remaining ? (
                   <>
                     {" "}in{" "}
-                    <strong className="text-slate-800 tabular-nums">
+                    <strong className="inline-block min-w-[2.5rem] font-semibold text-slate-900 tabular-nums">
                       {remaining}
                     </strong>
                   </>
@@ -75,22 +69,21 @@ export default function IdleWarningModal({ open, deadline, onStaySignedIn }) {
                 )}
                 .
               </p>
-              <p className="text-xs text-slate-400 mt-2">
+              <p className="text-xs text-slate-500 mt-2 flex items-center gap-1.5">
+                <Icon name="lock" size={12} />
                 This keeps shared computers secure.
               </p>
             </div>
           </div>
         </div>
 
-        <div className="px-5 sm:px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
+        <div className="px-5 sm:px-6 pb-5 sm:pb-6 sm:pt-1 flex items-center justify-end">
           <button
             type="button"
             onClick={onStaySignedIn}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 active:scale-95 shadow-sm shadow-green-200 transition"
+            className={`${BTN.primary} ${BTN_SIZE.lg} sm:h-10 w-full sm:w-auto`}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
+            <Icon name="check" size={14} strokeWidth={3} />
             Stay signed in
           </button>
         </div>
