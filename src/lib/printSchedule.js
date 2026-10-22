@@ -42,6 +42,19 @@ export function printSchedule({
 
   const rangeTitle = periodTitle(days, month, year);
 
+  // One CSS class per shift type, colored from its palette entry (trusted
+  // values from src/lib/statuses.js). Indexed rather than derived from the
+  // code, so codes like "9-6" and "96" can't collide.
+  const shiftClass = new Map(
+    settings.shifts.map((s, i) => [s.code, `shift-${i}`]),
+  );
+  const shiftCss = settings.shifts
+    .map(
+      (s, i) =>
+        `  td.cell.shift-${i}, .legend-code.shift-${i} { background: ${s.print[0]} !important; color: ${s.print[1]} !important; }`,
+    )
+    .join("\n");
+
   const lookup = {};
   for (const s of schedules) {
     lookup[`${s.employee_id}|${s.date}`] = s.status;
@@ -77,13 +90,7 @@ export function printSchedule({
           else if (st === "OFF") off++;
 
           let cls = "cell";
-          if (st) {
-            const safe = st
-              .toLowerCase()
-              .replace(/[^a-z0-9]/g, "")
-              .replace(/^(\d)/, "n$1");
-            cls += ` cell-${safe}`;
-          }
+          if (st && shiftClass.has(st)) cls += ` ${shiftClass.get(st)}`;
 
           return `<td class="${cls}">${escapeHtml(st || "")}</td>`;
         })
@@ -302,36 +309,8 @@ export function printSchedule({
     color: #111;
   }
 
-  td.cell.cell-duty { background: #7dd3fc !important; color: #0c4a6e !important; }
-  td.cell.cell-am   { background: #93c5fd !important; color: #1e3a8a !important; }
-  td.cell.cell-pm   { background: #fcd34d !important; color: #78350f !important; }
-  td.cell.cell-ms   { background: #86efac !important; color: #14532d !important; }
-  td.cell.cell-ns   { background: #a5b4fc !important; color: #1e1b4b !important; }
-  td.cell.cell-g    { background: #cbd5e1 !important; color: #0f172a !important; }
-  td.cell.cell-n96  { background: #fdba74 !important; color: #7c2d12 !important; }
-  td.cell.cell-as   { background: #fda4af !important; color: #881337 !important; }
-  td.cell.cell-rs   { background: #67e8f9 !important; color: #164e63 !important; }
-  td.cell.cell-ls   { background: #c4b5fd !important; color: #3b0764 !important; }
-  td.cell.cell-es   { background: #f0abfc !important; color: #581c87 !important; }
-  td.cell.cell-off  { background: #e2e8f0 !important; color: #334155 !important; }
   td.cell.total     { background: #e8f5e9 !important; color: #166534 !important; }
-  td.cell.cell-c3   { background: #5eead4 !important; color: #134e4a !important; }
-  td.cell.cell-il   { background: #a7f3d0 !important; color: #064e3b !important; }
-
-  .legend-code.cell-duty { background: #7dd3fc !important; color: #0c4a6e !important; }
-  .legend-code.cell-am   { background: #93c5fd !important; color: #1e3a8a !important; }
-  .legend-code.cell-pm   { background: #fcd34d !important; color: #78350f !important; }
-  .legend-code.cell-ms   { background: #86efac !important; color: #14532d !important; }
-  .legend-code.cell-ns   { background: #a5b4fc !important; color: #1e1b4b !important; }
-  .legend-code.cell-g    { background: #cbd5e1 !important; color: #0f172a !important; }
-  .legend-code.cell-n96  { background: #fdba74 !important; color: #7c2d12 !important; }
-  .legend-code.cell-as   { background: #fda4af !important; color: #881337 !important; }
-  .legend-code.cell-rs   { background: #67e8f9 !important; color: #164e63 !important; }
-  .legend-code.cell-ls   { background: #c4b5fd !important; color: #3b0764 !important; }
-  .legend-code.cell-es   { background: #f0abfc !important; color: #581c87 !important; }
-  .legend-code.cell-off  { background: #e2e8f0 !important; color: #334155 !important; }
-  .legend-code.cell-c3   { background: #5eead4 !important; color: #134e4a !important; }
-  .legend-code.cell-il   { background: #a7f3d0 !important; color: #064e3b !important; }
+${shiftCss}
 
   th.sum-h {
     font-weight: 800;
@@ -432,15 +411,7 @@ export function printSchedule({
         .map(
           (s) => `
         <span class="legend-item">
-          <span class="legend-code ${
-            s.code === "DUTY"
-              ? "cell-duty"
-              : "cell-" +
-                s.code
-                  .toLowerCase()
-                  .replace(/[^a-z0-9]/g, "")
-                  .replace(/^(\d)/, "n$1")
-          }">${escapeHtml(s.code)}</span>
+          <span class="legend-code ${shiftClass.get(s.code) || ""}">${escapeHtml(s.code)}</span>
 <span class="legend-text">
 ${escapeHtml(s.label)}${s.time ? ` — ${escapeHtml(s.time)}` : ""}
 </span>

@@ -1,7 +1,11 @@
 import { useId, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { STATUSES, STATUS_MAP } from "../lib/statuses";
-import { useSettings } from "../lib/settings";
+import {
+  PROTECTED_SHIFTS,
+  SHIFT_CODE_PATTERN,
+  SHIFT_COLORS,
+} from "../lib/statuses";
+import { findShift, useSettings } from "../lib/settings";
 import { canManageEmployees } from "../lib/auth";
 import { friendlyError } from "../lib/errors";
 import { formatName } from "../lib/format";
@@ -95,6 +99,8 @@ export default function SettingsPage({ role, onSaved }) {
           onSaved={onSaved}
         />
       </section>
+
+      <ShiftTypesSection onSaved={onSaved} />
 
       <section className="space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
@@ -292,6 +298,349 @@ function BannerPreview({ src }) {
   );
 }
 
+/* ------------------ Shift types ------------------ */
+function ShiftTypesSection({ onSaved }) {
+  const settings = useSettings();
+  const [adding, setAdding] = useState(false);
+  // Editable only once the shift_types table exists (proposed_shift_types.sql).
+  const ready = settings.shiftsSource === "database";
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <SectionHeading
+          title="Shifts"
+          description="Every shift type the app knows. A new shift appears in each department's list below; tick it there to use it. A shift that saved schedules still use can't be deleted."
+        />
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          disabled={adding || !ready}
+          className={`${BTN.primary} ${BTN_SIZE.md} shrink-0`}
+        >
+          <Icon name="plus" size={16} strokeWidth={2.5} />
+          Add shift
+        </button>
+      </div>
+
+      {!ready && (
+        <div className="rounded-2xl bg-amber-50 ring-1 ring-inset ring-amber-200/80 px-4 py-3 text-sm text-amber-900 leading-relaxed">
+          {settings.shiftsError && <p className="mb-1">{settings.shiftsError}</p>}
+          <p>
+            Shifts can be added and deleted here after{" "}
+            <code className="font-mono text-xs bg-amber-100/80 rounded px-1 py-0.5">
+              supabase/proposed_shift_types.sql
+            </code>{" "}
+            is run in the Supabase SQL Editor. Until then the built-in shifts below are used.
+          </p>
+        </div>
+      )}
+
+      {adding && (
+        <div className={`${CARD} ring-2 ring-green-600/40 overflow-hidden animate-pop-in`}>
+          <ShiftTypeForm
+            isNew
+            onCancel={() => setAdding(false)}
+            onSaved={async () => {
+              setAdding(false);
+              await onSaved();
+            }}
+          />
+        </div>
+      )}
+
+      <ul className={`${CARD} divide-y divide-slate-100 overflow-hidden`}>
+        {settings.shifts.map((s) => (
+          <ShiftTypeRow
+            key={`${s.code}|${s.label}|${s.time}|${s.color}`}
+            shift={s}
+            editable={ready}
+            onSaved={onSaved}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ShiftTypeRow({ shift, editable, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+  const isProtected = PROTECTED_SHIFTS.includes(shift.code);
+
+  async function remove() {
+    setConfirmDelete(false);
+    setDeleting(true);
+    setError("");
+    const { data, error } = await supabase
+      .from("shift_types")
+      .delete()
+      .eq("code", shift.code)
+      .select();
+    setDeleting(false);
+
+    if (error?.code === "23503") {
+      return setError(
+        `${shift.code} is still used in saved schedules, so it can't be deleted. Untick it in each department to stop using it, or clear those days on the Scheduler first.`,
+      );
+    }
+    if (error) return setError(friendlyError(error, "delete this shift"));
+    if (!data?.length) {
+      return setError("Nothing was deleted. You may not have permission to change settings.");
+    }
+    await onSaved();
+  }
+
+  if (editing) {
+    return (
+      <li className="bg-slate-50/40">
+        <ShiftTypeForm
+          shift={shift}
+          onCancel={() => setEditing(false)}
+          onSaved={async () => {
+            setEditing(false);
+            await onSaved();
+          }}
+        />
+      </li>
+    );
+  }
+
+  return (
+    <li className="px-4 sm:px-5 py-3">
+      <div className="flex items-center gap-3">
+        <span
+          className={`min-w-[3.25rem] h-9 px-2 rounded-lg text-xs font-bold tracking-tight grid place-items-center shrink-0 shadow-[inset_0_0_0_1px_rgb(15_23_42/0.06)] ${shift.classes}`}
+        >
+          {shift.code}
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-900 truncate">{shift.label}</span>
+            {isProtected && (
+              <span className="shrink-0 text-[0.625rem] uppercase tracking-wider font-semibold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
+                Required
+              </span>
+            )}
+          </span>
+          <span className="block text-xs text-slate-500 truncate">
+            {shift.time || "No standard time"}
+          </span>
+        </span>
+        {editable && (
+          <span className="flex gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              aria-label={`Edit ${shift.code}`}
+              className={`${BTN.ghostBrand} ${BTN_SIZE.sm}`}
+            >
+              <Icon name="pencil" size={14} />
+              <span className="hidden sm:inline">Edit</span>
+            </button>
+            {!isProtected && (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                disabled={deleting}
+                aria-label={`Delete ${shift.code}`}
+                className={`${BTN.destructiveGhost} ${BTN_SIZE.sm}`}
+              >
+                <Icon name="trash" size={14} />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            )}
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <div className="mt-3">
+          <ErrorBanner message={error} onDismiss={() => setError("")} />
+        </div>
+      )}
+
+      <ConfirmModal
+        open={confirmDelete}
+        title={`Delete ${shift.code} (${shift.label})?`}
+        message="It's also removed from every department that uses it. This only works if no saved schedule uses it."
+        confirmLabel="Yes, delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={remove}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </li>
+  );
+}
+
+function ShiftTypeForm({ shift, isNew = false, onCancel, onSaved }) {
+  const settings = useSettings();
+  const [form, setForm] = useState({
+    code: shift?.code || "",
+    label: shift?.label || "",
+    time: shift?.time || "",
+    color: shift?.color || "sky",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const colorLabelId = useId();
+
+  const code = form.code.trim();
+  const dirty =
+    isNew ||
+    form.label.trim() !== shift.label ||
+    form.time.trim() !== shift.time ||
+    form.color !== shift.color;
+  const preview = SHIFT_COLORS[form.color] || SHIFT_COLORS.gray;
+
+  function update(field, value) {
+    setForm((f) => ({ ...f, [field]: value }));
+    setError("");
+  }
+
+  async function save() {
+    const label = form.label.trim();
+    const time = form.time.trim();
+    if (isNew) {
+      if (!SHIFT_CODE_PATTERN.test(code)) {
+        return setError(
+          "Enter a code of 1–6 characters: capital letters, numbers or “-” (not first), e.g. NS2 or 7-4.",
+        );
+      }
+      if (findShift(settings, code)) return setError(`A shift with the code ${code} already exists.`);
+    }
+    if (!label) return setError("Enter a name for this shift.");
+
+    setSaving(true);
+    setError("");
+    const nextOrder =
+      Math.max(0, ...settings.shifts.map((s) => s.sortOrder || 0)) + 1;
+    const { data, error } = isNew
+      ? await supabase
+          .from("shift_types")
+          .insert({ code, label, default_time: time || null, color: form.color, sort_order: nextOrder })
+          .select()
+      : await supabase
+          .from("shift_types")
+          .update({ label, default_time: time || null, color: form.color })
+          .eq("code", shift.code)
+          .select();
+    setSaving(false);
+
+    if (error?.code === "23505") return setError(`A shift with the code ${code} already exists.`);
+    if (error) {
+      return setError(friendlyError(error, isNew ? "add this shift" : "save this shift"));
+    }
+    if (!data?.length) {
+      return setError("Nothing was saved. You may not have permission to change settings.");
+    }
+    await onSaved();
+  }
+
+  return (
+    <>
+      <div className="p-4 sm:p-6 space-y-5">
+        {isNew && (
+          <h3 className="text-base font-semibold text-slate-900 tracking-tight flex items-center gap-2">
+            <span className="w-7 h-7 rounded-lg bg-green-50 text-green-700 grid place-items-center" aria-hidden="true">
+              <Icon name="plus" size={14} strokeWidth={2.5} />
+            </span>
+            New shift
+          </h3>
+        )}
+        <ErrorBanner message={error} onDismiss={() => setError("")} />
+
+        <div className="grid grid-cols-1 sm:grid-cols-[8rem_1fr_1fr] gap-4">
+          <Field
+            label="Code"
+            hint={isNew ? "Shown in the grid. Can't be changed later." : "Can't be changed."}
+          >
+            <input
+              className={`${INPUT} uppercase font-semibold tracking-wide`}
+              value={form.code}
+              onChange={(e) => update("code", e.target.value.toUpperCase().replace(/\s/g, ""))}
+              maxLength={6}
+              disabled={!isNew}
+              placeholder="e.g. NS2"
+              autoFocus={isNew}
+            />
+          </Field>
+          <Field label="Name">
+            <input
+              className={INPUT}
+              value={form.label}
+              onChange={(e) => update("label", e.target.value)}
+              placeholder="e.g. Night Shift 2"
+            />
+          </Field>
+          <Field label="Standard time" hint="Departments can override it.">
+            <input
+              className={INPUT}
+              value={form.time}
+              onChange={(e) => update("time", e.target.value)}
+              placeholder="e.g. 7:00 PM – 7:00 AM"
+            />
+          </Field>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <span id={colorLabelId} className="block text-xs font-semibold text-slate-700">
+              Color
+            </span>
+            <span
+              className={`min-w-[3.25rem] h-8 px-2 rounded-lg text-xs font-bold tracking-tight grid place-items-center shadow-[inset_0_0_0_1px_rgb(15_23_42/0.06)] ${preview.classes}`}
+              aria-hidden="true"
+            >
+              {code || "ABC"}
+            </span>
+          </div>
+          <div role="group" aria-labelledby={colorLabelId} className="flex flex-wrap gap-1.5">
+            {Object.entries(SHIFT_COLORS).map(([key, c]) => {
+              const on = form.color === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={c.label}
+                  title={c.label}
+                  onClick={() => update("color", key)}
+                  className={`w-9 h-9 rounded-lg grid place-items-center transition active:scale-95 ${c.classes} ${
+                    on
+                      ? "ring-2 ring-green-600 ring-offset-2"
+                      : "shadow-[inset_0_0_0_1px_rgb(15_23_42/0.08)] hover:scale-105"
+                  }`}
+                >
+                  {on && <Icon name="check" size={14} strokeWidth={3} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <SaveBar
+        dirty={dirty}
+        saving={saving}
+        onSave={save}
+        extra={
+          <button
+            type="button"
+            onClick={onCancel}
+            className={`${BTN.ghost} ${BTN_SIZE.md} w-full sm:w-auto`}
+          >
+            Cancel
+          </button>
+        }
+      />
+    </>
+  );
+}
+
 /* ------------------ Department card ------------------ */
 function toForm(d) {
   return {
@@ -326,6 +675,7 @@ function toPayload(form) {
 }
 
 function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
+  const settings = useSettings();
   const [form, setForm] = useState(() => toForm(department));
   const [open, setOpen] = useState(isNew);
   const [saving, setSaving] = useState(false);
@@ -453,7 +803,7 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
               {department.shifts.map((code) => (
                 <span
                   key={code}
-                  className={`text-[0.625rem] font-bold rounded-md px-1.5 py-0.5 ${STATUS_MAP[code]?.classes || "bg-slate-100 text-slate-600"}`}
+                  className={`text-[0.625rem] font-bold rounded-md px-1.5 py-0.5 ${findShift(settings, code)?.classes || "bg-slate-100 text-slate-600"}`}
                 >
                   {code}
                 </span>
@@ -580,12 +930,13 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
 }
 
 function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
+  const settings = useSettings();
   return (
     <fieldset className="space-y-3">
       <legend className="text-xs font-semibold text-slate-700 mb-3">Shifts this department can use</legend>
 
       <div className="flex flex-wrap gap-1.5">
-        {STATUSES.map((s) => {
+        {settings.shifts.map((s) => {
           const on = shifts.includes(s.code);
           return (
             <button
@@ -609,7 +960,7 @@ function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
       {shifts.length > 0 && (
         <ul className="divide-y divide-slate-100 rounded-xl ring-1 ring-inset ring-slate-900/[0.07] overflow-hidden">
           {shifts.map((code, i) => {
-            const s = STATUS_MAP[code];
+            const s = findShift(settings, code);
             if (!s) return null;
             return (
               <li key={code} className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 px-3 py-2.5 bg-white">

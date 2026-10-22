@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { STATUS_MAP } from "../lib/statuses";
-import { shiftsForDepartment, useSettings } from "../lib/settings";
+import { unknownShift } from "../lib/statuses";
+import { findShift, shiftsForDepartment, useSettings } from "../lib/settings";
 import { handleMenuKeyDown } from "../lib/useDialog";
 import Icon from "./Icon";
 
@@ -536,7 +536,10 @@ function CellButton({
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
-  const current = status ? STATUS_MAP[status] : null;
+  const settings = useSettings();
+  const current = status
+    ? findShift(settings, status) || unknownShift(status)
+    : null;
 
   function close(refocus) {
     setOpen(false);
@@ -661,7 +664,10 @@ function Popup({ anchorRef, label, name, dateText, current, statuses, compact, o
     )?.focus();
   }, []);
 
-  const currentShift = current ? STATUS_MAP[current] : null;
+  const settings = useSettings();
+  const currentShift = current
+    ? findShift(settings, current) || unknownShift(current)
+    : null;
 
   return (
     <>

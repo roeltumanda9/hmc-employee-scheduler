@@ -5,6 +5,7 @@ import { printSchedule } from "../lib/printSchedule";
 import {
   departmentNames,
   findDepartment,
+  findShift,
   resolveShift,
   useSettings,
 } from "../lib/settings";
@@ -27,7 +28,6 @@ import {
   SPINNER_ON_BRAND,
 } from "../lib/ui";
 
-import { STATUS_MAP } from "../lib/statuses";
 
 // Supabase returns at most 1000 rows per request by default, so page through.
 const PAGE_SIZE = 1000;
@@ -219,8 +219,9 @@ export default function SchedulerPage({ role, onDirtyChange }) {
       .filter(Boolean);
 
     const hasOff = resolved.some((s) => s.code === "OFF");
-    if (!hasOff && STATUS_MAP["OFF"]) {
-      resolved.push(STATUS_MAP["OFF"]);
+    const off = findShift(settings, "OFF");
+    if (!hasOff && off) {
+      resolved.push(off);
     }
     return resolved;
   }, [dept, isAllDepts, settings]);
