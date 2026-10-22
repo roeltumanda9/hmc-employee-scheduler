@@ -89,17 +89,32 @@ export const COMPACT_SIZES = {
 
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-export function computeLayout(paneWidth, dayCount, compact) {
+// Column widths for a pane `width` px wide. The name and totals columns are
+// sized from `stableWidth` (the outer width) so they never change when a
+// vertical scrollbar comes or goes; only the day columns absorb it.
+function fitSizes(width, dayCount, stableWidth = width) {
+  const empW = Math.round(clamp(stableWidth * 0.18, 160, 260));
+  const summaryW = Math.round(clamp(stableWidth * 0.055, 52, 84));
+  // Floor to 1/100 px so rounding can never push the table past the pane.
+  const dayW = Math.floor(((width - empW - 4 * summaryW) / dayCount) * 100) / 100;
+  return { empW, summaryW, dayW };
+}
+
+/**
+ * `paneWidth`: the space inside the grid pane (excludes a vertical
+ * scrollbar); columns are sized to fill it exactly.
+ * `outerWidth`: the pane including any scrollbar. Whether to fit and which
+ * type tier to use are decided from it, so a scrollbar appearing or
+ * disappearing (which changes `paneWidth`) can't flip the tier, change row
+ * heights, and toggle the scrollbar again.
+ */
+export function computeLayout(paneWidth, dayCount, compact, outerWidth = paneWidth) {
   if (compact) return { ...COMPACT_SIZES, fit: false };
   if (paneWidth > 0 && dayCount > 0) {
-    const empW = Math.round(clamp(paneWidth * 0.18, 160, 260));
-    const summaryW = Math.round(clamp(paneWidth * 0.055, 52, 84));
-    // Floor to 1/100 px so rounding can never push the table past the pane.
-    const dayW =
-      Math.floor(((paneWidth - empW - 4 * summaryW) / dayCount) * 100) / 100;
-    if (dayW >= MIN_FIT_DAY) {
-      const tier = FIT_TIERS.find((t) => dayW < t.upTo);
-      return { ...tier, empW, summaryW, dayW, fit: true };
+    const decide = fitSizes(outerWidth, dayCount);
+    if (decide.dayW >= MIN_FIT_DAY) {
+      const tier = FIT_TIERS.find((t) => decide.dayW < t.upTo);
+      return { ...tier, ...fitSizes(paneWidth, dayCount, outerWidth), fit: true };
     }
   }
   return { ...SCROLL_SIZES, fit: false };

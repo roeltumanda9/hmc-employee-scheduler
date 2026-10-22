@@ -15,7 +15,7 @@ import Icon from "./Icon";
 const COMPACT_QUERY = "(max-width: 639px)";
 
 // Height of the month band row above the day numbers (px).
-const MONTH_BAND_H = 22;
+const MONTH_BAND_H = 28;
 
 const SHORT_MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -44,19 +44,27 @@ function useMediaQuery(query) {
   return matches;
 }
 
+// { inner, outer }: width inside the element (without a vertical scrollbar)
+// and including it. The observer fires when a scrollbar appears, too.
 function useElementWidth(ref) {
-  const [width, setWidth] = useState(0);
+  const [size, setSize] = useState({ inner: 0, outer: 0 });
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    setWidth(el.clientWidth);
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    const measure = () => {
+      const next = { inner: el.clientWidth, outer: el.offsetWidth };
+      setSize((prev) =>
+        prev.inner === next.inner && prev.outer === next.outer ? prev : next,
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, [ref]);
 
-  return width;
+  return size;
 }
 
 // "Mon, Oct 12" — for screen-reader labels
@@ -86,8 +94,8 @@ export default function ScheduleGrid({
   const compact = useMediaQuery(COMPACT_QUERY);
   const settings = useSettings();
   const paneRef = useRef(null);
-  const paneWidth = useElementWidth(paneRef);
-  const z = computeLayout(paneWidth, days.length, compact);
+  const { inner: paneWidth, outer: paneOuterWidth } = useElementWidth(paneRef);
+  const z = computeLayout(paneWidth, days.length, compact, paneOuterWidth);
   // Narrow totals columns get one-word headers (full text stays in aria-label).
   const shortLabels = z.summaryW < 76;
   const showRowNumber = !compact && z.empW >= 220;
@@ -171,7 +179,7 @@ export default function ScheduleGrid({
     <div className="-mx-4 sm:mx-0 bg-white border-y border-slate-900/[0.07] sm:border-0 sm:rounded-2xl sm:ring-1 sm:ring-slate-900/[0.06] shadow-card overflow-hidden">
       <div
         ref={paneRef}
-        className={`group/grid ${z.fit ? "overflow-y-auto overflow-x-hidden" : "overflow-auto overscroll-x-contain"} [scrollbar-gutter:stable] scroll-thin ${paneHeight} sm:max-h-[calc(100dvh-6rem)] lg:max-h-[calc(100dvh-9.5rem)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-green-600`}
+        className={`group/grid ${z.fit ? "overflow-y-auto overflow-x-hidden" : "overflow-auto overscroll-x-contain"} scroll-thin ${paneHeight} sm:max-h-[calc(100dvh-6rem)] lg:max-h-[calc(100dvh-9.5rem)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-green-600`}
         role="region"
         aria-label="Schedule grid"
         tabIndex={0}
@@ -207,7 +215,7 @@ export default function ScheduleGrid({
                 rowSpan={2}
                 className={`sticky left-0 top-0 z-30 bg-white border-b border-r border-slate-200 px-3 ${z.fit ? "lg:px-4" : ""} py-2 text-left align-bottom ${NAME_SHADOW}`}
               >
-                <span className="text-[10px] sm:text-[11px] uppercase tracking-[0.08em] text-slate-500 font-semibold">
+                <span className="text-[13px] sm:text-[14px] text-slate-700 font-semibold">
                   Employee
                 </span>
               </th>
@@ -222,8 +230,8 @@ export default function ScheduleGrid({
                     i < monthGroups.length - 1 ? "border-r border-r-slate-200" : ""
                   } px-2 py-0 text-left align-middle`}
                 >
-                  <span className="block truncate text-[10px] uppercase tracking-[0.1em] font-bold text-green-700">
-                    {g.span * z.dayW >= 90 ? MONTHS[g.month - 1] : SHORT_MONTHS[g.month - 1]}
+                  <span className="block truncate text-[12px] sm:text-[13px] uppercase tracking-[0.06em] font-bold text-green-800">
+                    {g.span * z.dayW >= 125 ? MONTHS[g.month - 1] : SHORT_MONTHS[g.month - 1]}
                   </span>
                 </th>
               ))}

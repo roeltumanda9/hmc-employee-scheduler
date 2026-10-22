@@ -28,7 +28,6 @@ import {
   BTN,
   BTN_SIZE,
   CARD,
-  EYEBROW,
   MENU,
   MENU_HEADING,
   MENU_ITEM,
@@ -943,43 +942,46 @@ export default function SchedulerPage({ role, onDirtyChange }) {
         )}
       </div>
 
-      {/* Shift legend: one swipeable row on phones; on laptops a compact strip
-          (times move into the hover tooltip) so the grid starts higher. */}
+      {/* Shift legend: code, name and time for each shift this department
+          uses. One swipeable row on phones, wrapped from sm up. */}
       {!isAllDepts && legendShifts.length > 0 && (
-        <div
-          className={`${CARD} overflow-hidden px-3 sm:px-4 py-2.5 sm:py-3 lg:py-2 lg:flex lg:items-center lg:gap-3`}
+        <section
+          aria-label={`Shifts for ${dept}`}
+          className={`${CARD} overflow-hidden px-3 sm:px-4 py-3 sm:py-3.5`}
         >
-          <div className="flex items-baseline justify-between gap-3 mb-2 lg:mb-0 lg:shrink-0">
-            <div className={EYEBROW}>Shifts</div>
-            <div className="text-xs font-semibold text-slate-700 truncate lg:hidden">{dept}</div>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="w-1 h-5 rounded-full bg-green-600 shrink-0" aria-hidden="true" />
+            <h3 className="text-[0.9375rem] font-semibold text-slate-900 tracking-tight">
+              Shifts
+            </h3>
+            <span className="min-w-0 truncate text-xs font-semibold rounded-full bg-green-50 text-green-800 ring-1 ring-inset ring-green-600/15 px-2 py-0.5">
+              {dept}
+            </span>
           </div>
 
-          <ul className="flex gap-2 lg:gap-1.5 overflow-x-auto scroll-none snap-x -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible">
+          <ul className="flex gap-2 overflow-x-auto scroll-none snap-x -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible">
             {legendShifts.map((s) => (
               <li
                 key={s.code}
-                title={s.time ? `${s.label} · ${s.time}` : s.label}
-                className="snap-start shrink-0 inline-flex items-center gap-2 lg:gap-1.5 rounded-xl lg:rounded-lg bg-slate-50 ring-1 ring-inset ring-slate-900/[0.05] p-1 pr-3 lg:pr-2.5"
+                className="snap-start shrink-0 inline-flex items-center gap-2.5 rounded-xl bg-white ring-1 ring-inset ring-slate-200 shadow-card p-1.5 pr-3.5"
               >
                 <span
-                  className={`inline-flex items-center justify-center min-w-[2.75rem] lg:min-w-[2.25rem] h-7 lg:h-6 rounded-lg lg:rounded-md px-2 lg:px-1.5 text-xs lg:text-[11px] font-bold tracking-tight shadow-[inset_0_0_0_1px_rgb(15_23_42/0.06)] ${s.classes}`}
+                  className={`inline-flex items-center justify-center min-w-[3rem] h-8 rounded-lg px-2 text-xs font-bold tracking-tight shadow-[inset_0_0_0_1px_rgb(15_23_42/0.08)] ${s.classes}`}
                 >
                   {s.code}
                 </span>
                 <span className="flex flex-col leading-tight">
-                  <span className="text-xs font-semibold text-slate-800 whitespace-nowrap">
+                  <span className="text-[0.8125rem] font-semibold text-slate-900 whitespace-nowrap">
                     {s.label}
                   </span>
-                  {s.time && (
-                    <span className="text-[0.6875rem] text-slate-500 whitespace-nowrap tabular-nums lg:sr-only">
-                      {s.time}
-                    </span>
-                  )}
+                  <span className="text-xs text-slate-600 whitespace-nowrap tabular-nums mt-0.5">
+                    {s.time || (s.isLeave ? "Leave" : s.code === "OFF" ? "Rest day" : "No set time")}
+                  </span>
                 </span>
               </li>
             ))}
           </ul>
-        </div>
+        </section>
       )}
 
       {loading ? (

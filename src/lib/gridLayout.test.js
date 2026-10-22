@@ -25,6 +25,28 @@ describe("computeLayout", () => {
     }
   });
 
+  it("fills the pane edge to edge (no empty strip on the right)", () => {
+    for (const pane of [928, 1014, 1088, 1568]) {
+      const z = computeLayout(pane, 15, false);
+      expect(pane - tableWidth(z, 15)).toBeLessThan(1); // under 1px of rounding
+    }
+  });
+
+  it("a vertical scrollbar only narrows the day columns, never the tier", () => {
+    for (let outer = 920; outer <= 2000; outer += 7) {
+      const inner = outer - 12; // classic scrollbar
+      const without = computeLayout(outer, 15, false, outer);
+      const withBar = computeLayout(inner, 15, false, outer);
+      expect(withBar.fit).toBe(without.fit);
+      if (!without.fit) continue;
+      expect(withBar.cellH).toBe(without.cellH);
+      expect(withBar.empW).toBe(without.empW);
+      expect(withBar.summaryW).toBe(without.summaryW);
+      expect(tableWidth(withBar, 15)).toBeLessThanOrEqual(inner);
+      expect(inner - tableWidth(withBar, 15)).toBeLessThan(1);
+    }
+  });
+
   it("scrolls on narrow panes (small windows, tablets)", () => {
     expect(computeLayout(672, 15, false)).toEqual({ ...SCROLL_SIZES, fit: false });
   });

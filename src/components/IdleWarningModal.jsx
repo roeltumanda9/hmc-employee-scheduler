@@ -60,7 +60,7 @@ export default function IdleWarningModal({ open, deadline, onStaySignedIn }) {
                 {remaining ? (
                   <>
                     {" "}in{" "}
-                    <strong className="inline-block min-w-[2.5rem] font-semibold text-slate-900 tabular-nums">
+                    <strong className="font-semibold text-slate-900 tabular-nums">
                       {remaining}
                     </strong>
                   </>

@@ -289,14 +289,14 @@ export default function EmployeesPage({ role }) {
         <div className="hidden md:block overflow-x-auto scroll-thin rounded-b-2xl">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
-              <tr className="bg-slate-50/80 text-slate-500 text-left text-[0.6875rem] uppercase tracking-[0.08em]">
-                <th className="px-6 py-3 font-semibold w-28">Emp. No.</th>
-                <th className="px-6 py-3 font-semibold">Employee</th>
-                <th className="px-6 py-3 font-semibold">Department</th>
-                <th className="px-6 py-3 font-semibold">Role</th>
-                <th className="px-6 py-3 font-semibold">Leave in {leaveYear}</th>
+              <tr className="bg-slate-50 text-left text-[0.8125rem] text-slate-700 [&>th]:px-6 [&>th]:py-3.5 [&>th]:font-semibold [&>th]:border-b [&>th]:border-slate-200 [&>th]:whitespace-nowrap">
+                <th className="w-32">Emp. No.</th>
+                <th>Employee</th>
+                <th>Department</th>
+                <th>Role</th>
+                <th>Leave in {leaveYear}</th>
                 {canManage && (
-                  <th className="px-6 py-3 font-semibold text-right">
+                  <th className="text-right">
                     Actions
                   </th>
                 )}
@@ -329,11 +329,11 @@ export default function EmployeesPage({ role }) {
                   return (
                     <Fragment key={e.id}>
                     {head && (
-                      <tr className="bg-slate-50/70">
+                      <tr className="bg-white">
                         <th
                           scope="colgroup"
                           colSpan={canManage ? 6 : 5}
-                          className="px-6 pt-4 pb-2 text-left"
+                          className="px-6 pt-6 pb-3 text-left border-b border-slate-100"
                         >
                           <GroupHeading name={head.name} count={head.count} />
                         </th>
@@ -397,7 +397,7 @@ export default function EmployeesPage({ role }) {
               return (
                 <Fragment key={e.id}>
                 {head && (
-                  <div className="px-4 pt-4 pb-2 bg-slate-50/70">
+                  <div className="px-4 pt-5 pb-3 bg-white">
                     <GroupHeading name={head.name} count={head.count} />
                   </div>
                 )}
@@ -505,7 +505,7 @@ function LeaveSummary({ days, kinds }) {
   );
   if (used.length === 0) return allowance;
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
+    <span className="inline-flex flex-wrap md:flex-nowrap items-center gap-1.5">
       {allowance}
       {used.map((k) => {
         const dates = days[k.code];
@@ -528,12 +528,13 @@ function LeaveSummary({ days, kinds }) {
 /* ------------------ Department group heading ------------------ */
 function GroupHeading({ name, count }) {
   return (
-    <span className="flex items-center gap-2">
-      <span className="text-[0.6875rem] uppercase tracking-[0.08em] font-semibold text-slate-600">
+    <span className="flex items-center gap-3">
+      <span className="w-1 h-5 rounded-full bg-green-600 shrink-0" aria-hidden="true" />
+      <span className="text-[0.9375rem] font-semibold text-slate-900 tracking-tight">
         {name}
       </span>
-      <span className="text-[0.6875rem] font-semibold tabular-nums rounded-full bg-white ring-1 ring-inset ring-slate-900/10 text-slate-500 px-1.5 py-px">
-        {count}
+      <span className="text-xs font-semibold tabular-nums rounded-full bg-green-50 text-green-800 ring-1 ring-inset ring-green-600/15 px-2 py-0.5">
+        {count} {count === 1 ? "employee" : "employees"}
       </span>
     </span>
   );
