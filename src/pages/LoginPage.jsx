@@ -112,10 +112,17 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-5 px-2 text-xs text-slate-500 text-center text-balance leading-relaxed">
-          <Icon name="lock" size={12} className="inline-block -mt-0.5 mr-1.5" />
-          Accounts are created by IT. Contact IT if you need access.
-        </p>
+        <div className="mt-5 px-2 space-y-1 text-xs text-slate-500 text-center text-balance leading-relaxed">
+          <p>
+            <Icon name="lock" size={12} className="inline-block -mt-0.5 mr-1.5" />
+            Accounts are created by the IT department.
+          </p>
+          <p>Need access or forgot your password? Contact IT for help.</p>
+          <p className="pt-2">
+            <Icon name="clock" size={12} className="inline-block -mt-0.5 mr-1.5" />
+            For security, you're signed out after 15 minutes of inactivity.
+          </p>
+        </div>
       </div>
     </div>
   );
