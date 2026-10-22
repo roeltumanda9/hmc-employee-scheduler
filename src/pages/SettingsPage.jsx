@@ -213,7 +213,6 @@ function SaveBar({ dirty, saving, onSave, onReset, extra }) {
 
 /* ------------------ Print signatures ------------------ */
 const PRINT_FIELDS = [
-  "default_banner_url",
   "default_prepared_by_name",
   "default_prepared_by_title",
   "checked_by_name",
@@ -279,13 +278,6 @@ function PrintSettingsCard({ print, onSaved }) {
           <Field label="“Approved by” title">
             <input className={INPUT} value={form.approved_by_title} onChange={(e) => update("approved_by_title", e.target.value)} />
           </Field>
-          <Field
-            label="Default banner image"
-            hint="Used for “All departments” and departments without their own banner. A path to an image in the app's public folder, e.g. /logo-banner.png"
-          >
-            <input className={INPUT} list="banner-suggestions" value={form.default_banner_url} onChange={(e) => update("default_banner_url", e.target.value)} placeholder="/logo-banner.png" />
-          </Field>
-          <BannerPreview src={form.default_banner_url} />
         </div>
       </div>
 
