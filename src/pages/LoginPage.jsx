@@ -114,7 +114,7 @@ export default function LoginPage() {
 
         <p className="mt-5 px-2 text-xs text-slate-500 text-center text-balance leading-relaxed">
           <Icon name="lock" size={12} className="inline-block -mt-0.5 mr-1.5" />
-          Accounts are created by HR. Contact the admin if you need access.
+          Accounts are created by IT. Contact IT if you need access.
         </p>
       </div>
     </div>
