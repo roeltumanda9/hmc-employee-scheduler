@@ -149,6 +149,8 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Number of changes in the last successful save; shows the "saved" toast.
+  const [savedCount, setSavedCount] = useState(0);
   const [editSnapshot, setEditSnapshot] = useState(null);
   const [pending, setPending] = useState({});
   const [error, setError] = useState("");
@@ -275,6 +277,13 @@ export default function SchedulerPage({ role, onDirtyChange }) {
     onDirtyChange?.(dirty);
     return () => onDirtyChange?.(false);
   }, [dirty, onDirtyChange]);
+
+  // Hide the "saved" toast after a few seconds.
+  useEffect(() => {
+    if (!savedCount) return;
+    const t = setTimeout(() => setSavedCount(0), 3500);
+    return () => clearTimeout(t);
+  }, [savedCount]);
 
   // Warn before closing or reloading the tab with unsaved edits.
   useEffect(() => {
@@ -439,6 +448,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
     setEditing(false);
     await load();
     setSaving(false);
+    setSavedCount(changes.length);
   }
 
   function changeMonth(delta) {
@@ -489,15 +499,15 @@ export default function SchedulerPage({ role, onDirtyChange }) {
       {/* Pinned only on large screens, just below the app header (z-30).
           On phones and tablets it scrolls away so the grid gets the screen.
           z-40 keeps its department menu above the grid's sticky header (z-30). */}
-      <div className="lg:sticky lg:top-[4.5rem] lg:z-40 lg:-mx-6 lg:px-6 lg:py-2.5 lg:bg-[#f6f8f7]/85 lg:backdrop-blur-md">
-        <div className={`${CARD} p-2.5 sm:p-3 flex flex-col gap-2.5 lg:flex-row lg:flex-wrap lg:items-center`}>
+      <div className="lg:sticky lg:top-[4.5rem] lg:z-40 lg:-mx-6 lg:px-6 lg:py-2 lg:bg-[#f6f8f7]/85 lg:backdrop-blur-md">
+        <div className={`${CARD} p-2.5 sm:p-3 lg:p-2.5 flex flex-col gap-2.5 lg:flex-row lg:flex-wrap lg:items-center lg:gap-2`}>
           {/* MONTH */}
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => confirmDiscard(() => changeMonth(-1))}
               disabled={!canGoPrev()}
               aria-label="Previous month"
-              className={`${BTN.secondary} ${BTN_SIZE.icon} sm:h-11 sm:w-11 shrink-0`}
+              className={`${BTN.secondary} ${BTN_SIZE.icon} sm:h-11 sm:w-11 lg:h-10 lg:w-10 shrink-0`}
               title={
                 canGoPrev() ? "Previous month" : "No earlier months available"
               }
@@ -505,9 +515,9 @@ export default function SchedulerPage({ role, onDirtyChange }) {
               <Icon name="chevronLeft" size={18} strokeWidth={2.5} />
             </button>
 
-            <div className="flex-1 min-w-0 text-center px-1 lg:min-w-[12.5rem]">
+            <div className="flex-1 min-w-0 text-center px-1 lg:min-w-[10.5rem]">
               <div
-                className="text-[1.0625rem] sm:text-lg font-bold text-slate-900 tracking-tight leading-tight truncate"
+                className="text-[1.0625rem] sm:text-lg lg:text-base 2xl:text-lg font-bold text-slate-900 tracking-tight leading-tight truncate"
                 aria-live="polite"
               >
                 {periodTitle(days, month, year)}
@@ -524,14 +534,14 @@ export default function SchedulerPage({ role, onDirtyChange }) {
               onClick={() => confirmDiscard(() => changeMonth(1))}
               disabled={!canGoNext()}
               aria-label="Next month"
-              className={`${BTN.secondary} ${BTN_SIZE.icon} sm:h-11 sm:w-11 shrink-0`}
+              className={`${BTN.secondary} ${BTN_SIZE.icon} sm:h-11 sm:w-11 lg:h-10 lg:w-10 shrink-0`}
               title={canGoNext() ? "Next month" : "No later months available"}
             >
               <Icon name="chevronRight" size={18} strokeWidth={2.5} />
             </button>
           </div>
 
-          <div className="hidden xl:block h-8 w-px bg-slate-200 mx-0.5" aria-hidden="true" />
+          <div className="hidden 2xl:block h-8 w-px bg-slate-200 mx-0.5" aria-hidden="true" />
 
           {/* DEPARTMENT + PERIOD */}
           <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-2.5 lg:flex lg:items-center">
@@ -545,7 +555,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
             <div
               role="group"
               aria-label="Payroll period"
-              className="inline-flex h-10 sm:h-11 p-1 rounded-xl bg-slate-100 ring-1 ring-inset ring-slate-900/[0.04]"
+              className="inline-flex h-10 sm:h-11 lg:h-10 p-1 rounded-xl bg-slate-100 ring-1 ring-inset ring-slate-900/[0.04]"
             >
               {[
                 { value: 1, short: "27–11", long: "1st · 27–11" },
@@ -557,14 +567,14 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                     if (half !== p.value) confirmDiscard(() => setHalf(p.value));
                   }}
                   aria-pressed={half === p.value}
-                  className={`px-2.5 sm:px-3.5 h-full text-xs sm:text-sm font-semibold rounded-[9px] whitespace-nowrap tabular-nums transition ${
+                  className={`px-2.5 sm:px-3.5 lg:px-2.5 2xl:px-3.5 h-full text-xs sm:text-sm font-semibold rounded-[9px] whitespace-nowrap tabular-nums transition ${
                     half === p.value
                       ? "bg-white text-green-700 shadow-card ring-1 ring-slate-900/[0.06]"
                       : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
-                  <span className="sm:hidden">{p.short}</span>
-                  <span className="hidden sm:inline">{p.long}</span>
+                  <span className="sm:hidden lg:inline 2xl:hidden">{p.short}</span>
+                  <span className="hidden sm:inline lg:hidden 2xl:inline">{p.long}</span>
                 </button>
               ))}
             </div>
@@ -580,11 +590,12 @@ export default function SchedulerPage({ role, onDirtyChange }) {
               <button
                 onClick={handlePrint}
                 disabled={visibleEmployees.length === 0}
-                className={`${BTN.secondary} ${BTN_SIZE.md} sm:h-11`}
+                className={`${BTN.secondary} ${BTN_SIZE.md} sm:h-11 lg:h-10 lg:w-10 lg:px-0 2xl:w-auto 2xl:px-4`}
                 title="Print this schedule"
               >
                 <Icon name="printer" size={16} />
-                Print
+                {/* Icon-only on laptops to keep the toolbar on one row. */}
+                <span className="lg:sr-only 2xl:not-sr-only">Print</span>
               </button>
 
               {showEditAction && (
@@ -595,7 +606,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                     setEditing(true);
                   }}
                   disabled={loading || visibleEmployees.length === 0}
-                  className={`${BTN.primary} ${BTN_SIZE.md} sm:h-11 sm:px-5`}
+                  className={`${BTN.primary} ${BTN_SIZE.md} sm:h-11 sm:px-5 lg:h-10`}
                   title="Enable editing"
                 >
                   <Icon name="pencil" size={16} strokeWidth={2.25} />
@@ -612,7 +623,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                 <button
                   onClick={askClearHalf}
                   disabled={isAllDepts || visibleEmployees.length === 0}
-                  className={`${BTN.destructiveSoft} h-11 w-11 sm:w-auto sm:px-4 shrink-0`}
+                  className={`${BTN.destructiveSoft} h-11 w-11 lg:h-10 lg:w-10 2xl:w-auto 2xl:px-4 shrink-0`}
                   aria-label="Clear this period"
                   title={
                     isAllDepts
@@ -621,7 +632,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                   }
                 >
                   <Icon name="trash" size={16} />
-                  <span className="hidden sm:inline">Clear</span>
+                  <span className="hidden 2xl:inline">Clear</span>
                 </button>
 
                 {!isAllDepts && (
@@ -629,7 +640,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                     <button
                       onClick={cancelEdit}
                       disabled={saving}
-                      className={`${BTN.secondary} h-11 px-4 flex-1 sm:flex-none`}
+                      className={`${BTN.secondary} h-11 lg:h-10 px-4 lg:px-3 flex-1 sm:flex-none`}
                       title="Discard changes"
                     >
                       Cancel
@@ -637,7 +648,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                     <button
                       onClick={saveEdits}
                       disabled={saving || pendingCount === 0}
-                      className={`${BTN.primary} h-11 px-5 flex-[1.4] sm:flex-none`}
+                      className={`${BTN.primary} h-11 lg:h-10 px-5 lg:px-3.5 flex-[1.4] sm:flex-none`}
                       title="Save changes"
                     >
                       {saving ? (
@@ -693,22 +704,48 @@ export default function SchedulerPage({ role, onDirtyChange }) {
 
       <ErrorBanner message={error} onDismiss={() => setError("")} />
 
-      {/* Shift legend: one swipeable row on phones, wrapped from sm up */}
+      {/* "Saved" toast. The live region stays mounted so screen readers
+          announce the message when it appears. */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="fixed inset-x-0 bottom-4 sm:bottom-6 z-50 flex justify-center px-4 pointer-events-none"
+      >
+        {savedCount > 0 && (
+          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl bg-slate-900 text-white pl-3 pr-4 py-3 shadow-overlay animate-pop-in">
+            <span className="w-7 h-7 rounded-full bg-green-500 text-white grid place-items-center shrink-0" aria-hidden="true">
+              <Icon name="check" size={15} strokeWidth={3} />
+            </span>
+            <span className="text-sm">
+              <span className="font-semibold">Schedule saved</span>
+              <span className="text-slate-300">
+                {" "}· {savedCount} {savedCount === 1 ? "change" : "changes"}
+              </span>
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Shift legend: one swipeable row on phones; on laptops a compact strip
+          (times move into the hover tooltip) so the grid starts higher. */}
       {!isAllDepts && legendShifts.length > 0 && (
-        <div className={`${CARD} overflow-hidden px-3 sm:px-4 py-2.5 sm:py-3`}>
-          <div className="flex items-baseline justify-between gap-3 mb-2">
+        <div
+          className={`${CARD} overflow-hidden px-3 sm:px-4 py-2.5 sm:py-3 lg:py-2 lg:flex lg:items-center lg:gap-3`}
+        >
+          <div className="flex items-baseline justify-between gap-3 mb-2 lg:mb-0 lg:shrink-0">
             <div className={EYEBROW}>Shifts</div>
-            <div className="text-xs font-semibold text-slate-700 truncate">{dept}</div>
+            <div className="text-xs font-semibold text-slate-700 truncate lg:hidden">{dept}</div>
           </div>
 
-          <ul className="flex gap-2 overflow-x-auto scroll-none snap-x -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible">
+          <ul className="flex gap-2 lg:gap-1.5 overflow-x-auto scroll-none snap-x -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible">
             {legendShifts.map((s) => (
               <li
                 key={s.code}
-                className="snap-start shrink-0 inline-flex items-center gap-2 rounded-xl bg-slate-50 ring-1 ring-inset ring-slate-900/[0.05] p-1 pr-3"
+                title={s.time ? `${s.label} · ${s.time}` : s.label}
+                className="snap-start shrink-0 inline-flex items-center gap-2 lg:gap-1.5 rounded-xl lg:rounded-lg bg-slate-50 ring-1 ring-inset ring-slate-900/[0.05] p-1 pr-3 lg:pr-2.5"
               >
                 <span
-                  className={`inline-flex items-center justify-center min-w-[2.75rem] h-7 rounded-lg px-2 text-xs font-bold tracking-tight shadow-[inset_0_0_0_1px_rgb(15_23_42/0.06)] ${s.classes}`}
+                  className={`inline-flex items-center justify-center min-w-[2.75rem] lg:min-w-[2.25rem] h-7 lg:h-6 rounded-lg lg:rounded-md px-2 lg:px-1.5 text-xs lg:text-[11px] font-bold tracking-tight shadow-[inset_0_0_0_1px_rgb(15_23_42/0.06)] ${s.classes}`}
                 >
                   {s.code}
                 </span>
@@ -717,7 +754,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                     {s.label}
                   </span>
                   {s.time && (
-                    <span className="text-[0.6875rem] text-slate-500 whitespace-nowrap tabular-nums">
+                    <span className="text-[0.6875rem] text-slate-500 whitespace-nowrap tabular-nums lg:sr-only">
                       {s.time}
                     </span>
                   )}
@@ -894,7 +931,7 @@ function DepartmentDropdown({ value, onChange }) {
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Department: ${label}`}
-        className={`inline-flex items-center gap-2 rounded-xl px-3 sm:px-3.5 h-10 sm:h-11 text-sm font-semibold transition w-full lg:min-w-[11rem] lg:w-auto justify-between bg-white shadow-card ${
+        className={`inline-flex items-center gap-2 rounded-xl px-3 sm:px-3.5 h-10 sm:h-11 lg:h-10 text-sm font-semibold transition w-full lg:min-w-[9rem] lg:w-auto justify-between bg-white shadow-card ${
           open
             ? "ring-2 ring-green-600"
             : "ring-1 ring-inset ring-slate-200 hover:ring-slate-300 hover:bg-slate-50"

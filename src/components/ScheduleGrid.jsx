@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { unknownShift } from "../lib/statuses";
 import { findShift, shiftsForDepartment, useSettings } from "../lib/settings";
 import { handleMenuKeyDown } from "../lib/useDialog";
+import { MONTHS } from "../lib/dates";
 import Icon from "./Icon";
 
 /* ------------------------------------------------------------------
@@ -112,6 +113,9 @@ function computeLayout(paneWidth, dayCount, compact) {
 }
 
 const COMPACT_QUERY = "(max-width: 639px)";
+
+// Height of the month band row above the day numbers (px).
+const MONTH_BAND_H = 22;
 
 const SHORT_MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -227,6 +231,15 @@ export default function ScheduleGrid({
     ? "max-h-[calc(100dvh-4.5rem)]"
     : "max-h-[calc(100dvh-9.5rem)]";
 
+  // Consecutive days of the same month, for the month band above the dates.
+  const monthGroups = [];
+  for (const d of days) {
+    const [y, m] = d.iso.split("-").map(Number);
+    const last = monthGroups[monthGroups.length - 1];
+    if (last && last.month === m && last.year === y) last.span++;
+    else monthGroups.push({ key: `${y}-${m}`, year: y, month: m, span: 1 });
+  }
+
   const SUMMARY = [
     { key: "il", full: ["Incentive", "Leave"], short: "IL", head: "bg-emerald-50 text-emerald-800", foot: "bg-emerald-50 text-emerald-800", body: "text-emerald-800" },
     { key: "present", full: ["Physical", "Present"], short: "Present", head: "bg-green-50 text-green-800", foot: "bg-green-50 text-green-800", body: "text-green-700" },
@@ -244,7 +257,7 @@ export default function ScheduleGrid({
         tabIndex={0}
         onScroll={onGridScroll}
         // Keyboard focus never lands under the pinned name column/header.
-        style={{ scrollPaddingLeft: z.empW, scrollPaddingTop: 64 }}
+        style={{ scrollPaddingLeft: z.empW, scrollPaddingTop: 64 + MONTH_BAND_H }}
       >
         {/* Fixed layout with an explicit width so columns keep the computed
             sizes (in fit mode the sum equals the pane width). */}
@@ -267,9 +280,11 @@ export default function ScheduleGrid({
           </colgroup>
 
           <thead>
+            {/* Month band: a period spans two months (27th → 11th). */}
             <tr>
               <th
                 scope="col"
+                rowSpan={2}
                 className={`sticky left-0 top-0 z-30 bg-white border-b border-r border-slate-200 px-3 ${z.fit ? "lg:px-4" : ""} py-2 text-left align-bottom ${NAME_SHADOW}`}
               >
                 <span className="text-[10px] sm:text-[11px] uppercase tracking-[0.08em] text-slate-500 font-semibold">
@@ -277,6 +292,49 @@ export default function ScheduleGrid({
                 </span>
               </th>
 
+              {monthGroups.map((g, i) => (
+                <th
+                  key={g.key}
+                  scope="colgroup"
+                  colSpan={g.span}
+                  style={{ height: MONTH_BAND_H }}
+                  className={`sticky top-0 z-20 bg-white border-b border-slate-100 ${
+                    i < monthGroups.length - 1 ? "border-r border-r-slate-200" : ""
+                  } px-2 py-0 text-left align-middle`}
+                >
+                  <span className="block truncate text-[10px] uppercase tracking-[0.1em] font-bold text-green-700">
+                    {g.span * z.dayW >= 90 ? MONTHS[g.month - 1] : SHORT_MONTHS[g.month - 1]}
+                  </span>
+                </th>
+              ))}
+
+              {SUMMARY.map((s, i) => (
+                <th
+                  key={s.key}
+                  scope="col"
+                  rowSpan={2}
+                  aria-label={s.full.join(" ")}
+                  title={s.full.join(" ")}
+                  className={`sticky top-0 z-20 ${s.head} border-b border-slate-200 ${
+                    i === 0 ? "border-l" : ""
+                  } ${i < 3 ? "border-r" : ""} px-1 py-2 text-center ${HEAD_SHADOW}`}
+                >
+                  {shortLabels ? (
+                    <span className="text-[11px] font-semibold leading-tight">
+                      {s.short}
+                    </span>
+                  ) : (
+                    <span className="block text-[10px] uppercase tracking-wide font-semibold leading-tight">
+                      {s.full[0]}
+                      <br />
+                      {s.full[1]}
+                    </span>
+                  )}
+                </th>
+              ))}
+            </tr>
+
+            <tr>
               {days.map((d) => {
                 const weekend = isWeekend(d);
                 const isToday = d.iso === todayIso;
@@ -285,7 +343,8 @@ export default function ScheduleGrid({
                     key={d.iso}
                     scope="col"
                     aria-label={spokenDate(d)}
-                    className={`sticky top-0 z-20 border-b border-slate-200 ${dayBorder(d)} px-0 py-1.5 text-center ${HEAD_SHADOW} ${
+                    style={{ top: MONTH_BAND_H }}
+                    className={`sticky z-20 border-b border-slate-200 ${dayBorder(d)} px-0 py-1.5 text-center ${HEAD_SHADOW} ${
                       isToday ? "bg-green-50" : weekend ? "bg-slate-50" : "bg-white"
                     }`}
                   >
@@ -312,30 +371,6 @@ export default function ScheduleGrid({
                   </th>
                 );
               })}
-
-              {SUMMARY.map((s, i) => (
-                <th
-                  key={s.key}
-                  scope="col"
-                  aria-label={s.full.join(" ")}
-                  title={s.full.join(" ")}
-                  className={`sticky top-0 z-20 ${s.head} border-b border-slate-200 ${
-                    i === 0 ? "border-l" : ""
-                  } ${i < 3 ? "border-r" : ""} px-1 py-2 text-center ${HEAD_SHADOW}`}
-                >
-                  {shortLabels ? (
-                    <span className="text-[11px] font-semibold leading-tight">
-                      {s.short}
-                    </span>
-                  ) : (
-                    <span className="block text-[10px] uppercase tracking-wide font-semibold leading-tight">
-                      {s.full[0]}
-                      <br />
-                      {s.full[1]}
-                    </span>
-                  )}
-                </th>
-              ))}
             </tr>
           </thead>
 
