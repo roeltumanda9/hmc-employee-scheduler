@@ -254,11 +254,8 @@ export default function EmployeesPage({ role }) {
                         </span>
                       </td>
                       <td className="px-6 py-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Avatar employee={e} />
-                          <div className="font-semibold text-slate-900 truncate uppercase">
-                            {full || "—"}
-                          </div>
+                        <div className="font-semibold text-slate-900 truncate uppercase">
+                          {full || "—"}
                         </div>
                       </td>
                       <td className="px-6 py-3">
@@ -302,30 +299,27 @@ export default function EmployeesPage({ role }) {
               const full = displayName(e);
               return (
                 <div key={e.id} className="px-4 py-3.5">
-                  <div className="flex items-start gap-3">
-                    <Avatar employee={e} />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-slate-900 text-[0.9375rem] leading-snug uppercase break-words">
-                        {full || "—"}
-                      </div>
-                      <div className="mt-0.5 text-xs text-slate-500 uppercase truncate">
-                        {e.role}
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        <span
-                          className={`inline-flex items-center text-[0.6875rem] font-medium rounded-full px-2 py-0.5 ring-1 ring-inset ${DEPT_BADGE}`}
-                        >
-                          {e.department || "No department"}
-                        </span>
-                        <span className="text-[0.6875rem] text-slate-400 font-mono tabular-nums">
-                          {e.number ? `Emp. No. ${e.number}` : "No employee number"}
-                        </span>
-                      </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-900 text-[0.9375rem] leading-snug uppercase break-words">
+                      {full || "—"}
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-500 uppercase truncate">
+                      {e.role}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center text-[0.6875rem] font-medium rounded-full px-2 py-0.5 ring-1 ring-inset ${DEPT_BADGE}`}
+                      >
+                        {e.department || "No department"}
+                      </span>
+                      <span className="text-[0.6875rem] text-slate-400 font-mono tabular-nums">
+                        {e.number ? `Emp. No. ${e.number}` : "No employee number"}
+                      </span>
                     </div>
                   </div>
 
                   {canManage && (
-                    <div className="flex gap-2 mt-3 pl-12">
+                    <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => openEdit(e)}
                         aria-label={`Edit ${full}`}
@@ -375,21 +369,6 @@ export default function EmployeesPage({ role }) {
   );
 }
 
-/* ------------------ Avatar (initials, decorative) ------------------ */
-function Avatar({ employee: e }) {
-  const initials =
-    `${(e.last_name || "").trim().charAt(0)}${(e.first_name || "").trim().charAt(0)}` ||
-    (e.name || "?").trim().charAt(0);
-  return (
-    <div
-      className="w-9 h-9 shrink-0 rounded-full bg-green-50 text-green-800 ring-1 ring-inset ring-green-600/15 grid place-items-center text-xs font-semibold uppercase tracking-tight"
-      aria-hidden="true"
-    >
-      {initials}
-    </div>
-  );
-}
-
 /* ------------------ Loading skeleton ------------------ */
 function ListSkeleton() {
   return (
@@ -397,7 +376,6 @@ function ListSkeleton() {
       <span className="sr-only">Loading…</span>
       {Array.from({ length: 5 }, (_, i) => (
         <div key={i} className="flex items-center gap-3 animate-pulse" aria-hidden="true">
-          <div className="w-9 h-9 rounded-full bg-slate-100 shrink-0" />
           <div className="flex-1 space-y-2">
             <div className="h-3 rounded-full bg-slate-200/80 w-2/5" />
             <div className="h-2.5 rounded-full bg-slate-100 w-1/4" />

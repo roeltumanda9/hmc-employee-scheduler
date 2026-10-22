@@ -349,22 +349,16 @@ export default function App() {
 
         {/* Footer: signed in as + role + sign out */}
         <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-slate-100 space-y-1.5">
-          <div className="flex items-center gap-3 px-2 py-2">
-            <div
-              className="w-9 h-9 rounded-full bg-gradient-to-br from-green-500 to-green-700 text-white text-sm font-semibold grid place-items-center shrink-0 uppercase"
-              aria-hidden="true"
-            >
-              {(profile.email || "?").charAt(0)}
-            </div>
-            <div className="min-w-0">
-              <p className="sr-only">Signed in as</p>
-              <p className="text-xs font-medium text-slate-900 truncate">{profile.email}</p>
-              <p className="mt-0.5">
-                <span className="inline-flex items-center text-[0.625rem] uppercase tracking-wider font-semibold text-green-800 bg-green-50 ring-1 ring-inset ring-green-600/15 rounded-full px-1.5 py-0.5">
-                  {ROLE_LABELS[role] || role}
-                </span>
-              </p>
-            </div>
+          <div className="min-w-0 px-3 py-2">
+            <p className="text-[0.625rem] uppercase tracking-wider font-semibold text-slate-400">
+              Signed in as
+            </p>
+            <p className="mt-0.5 text-xs font-medium text-slate-900 truncate">{profile.email}</p>
+            <p className="mt-1">
+              <span className="inline-flex items-center text-[0.625rem] uppercase tracking-wider font-semibold text-green-800 bg-green-50 ring-1 ring-inset ring-green-600/15 rounded-full px-1.5 py-0.5">
+                {ROLE_LABELS[role] || role}
+              </span>
+            </p>
           </div>
           <button
             onClick={() => setConfirmSignOut(true)}
