@@ -16,11 +16,31 @@ function escapeHtml(value) {
   });
 }
 
+const shortMonth = (m) => MONTHS[m - 1].slice(0, 3);
+
+// "Oct 27 – Nov 11, 2026" (years shown on both ends when they differ).
+function dateRange(days) {
+  const first = days[0];
+  const last = days[days.length - 1];
+  if (!first || !last) return "";
+  const [fy, fm, fd] = first.iso.split("-").map(Number);
+  const [ly, lm, ld] = last.iso.split("-").map(Number);
+  return fy === ly
+    ? `${shortMonth(fm)} ${fd} – ${shortMonth(lm)} ${ld}, ${ly}`
+    : `${shortMonth(fm)} ${fd}, ${fy} – ${shortMonth(lm)} ${ld}, ${ly}`;
+}
+
+const isWeekend = (d) => d.weekday === "Sat" || d.weekday === "Sun";
+
 /**
  * Builds the printable schedule sheet as a standalone HTML document, writes
  * it into an off-screen iframe, waits for the banner images, and opens the
  * browser's print dialog. User data goes through escapeHtml.
  * Banners and signatures come from `settings` (see src/lib/settings.js).
+ *
+ * The page only asks for landscape, not a paper size: columns are sized in
+ * percentages, so the sheet fits whichever paper is picked in the dialog
+ * (short, long, A4).
  */
 export function printSchedule({
   dept,
@@ -42,6 +62,9 @@ export function printSchedule({
   const bannerUrl = new URL(banner, window.location.origin).href;
 
   const rangeTitle = periodTitle(days, month, year);
+  const rangeDates = dateRange(days);
+  const halfLabel = half === 1 ? "1st period" : "2nd period";
+  const halfDays = half === 1 ? "27th – 11th" : "12th – 26th";
 
   // One CSS class per shift type, colored from its palette entry (trusted
   // values from src/lib/statuses.js). Indexed rather than derived from the
@@ -52,7 +75,7 @@ export function printSchedule({
   const shiftCss = settings.shifts
     .map(
       (s, i) =>
-        `  td.cell.shift-${i}, .legend-code.shift-${i} { background: ${s.print[0]} !important; color: ${s.print[1]} !important; }`,
+        `  td.cell.shift-${i}, .swatch.shift-${i} { background: ${s.print[0]} !important; color: ${s.print[1]} !important; }`,
     )
     .join("\n");
 
@@ -61,13 +84,35 @@ export function printSchedule({
     lookup[`${s.employee_id}|${s.date}`] = s.status;
   }
 
+  // Column widths in % of the paper width: fixed name/totals, days share the rest.
+  const NUM_W = 2.6;
+  const NAME_W = 15;
+  const SUM_W = 4.4;
+  const dayW = (100 - NUM_W - NAME_W - 4 * SUM_W) / Math.max(days.length, 1);
+
+  // Consecutive days of the same month, for the month band above the dates.
+  const monthGroups = [];
+  for (const d of days) {
+    const m = Number(d.iso.split("-")[1]);
+    const last = monthGroups[monthGroups.length - 1];
+    if (last && last.month === m) last.span++;
+    else monthGroups.push({ month: m, span: 1 });
+  }
+
+  const monthHeaders = monthGroups
+    .map(
+      (g) =>
+        `<th class="month" colspan="${g.span}">${g.span >= 3 ? MONTHS[g.month - 1] : shortMonth(g.month)}</th>`,
+    )
+    .join("");
+
   const dayHeaders = days
     .map(
       (d) => `
-      <th class="day">
-        <div class="weekday">${escapeHtml(d.weekday.toUpperCase())}</div>
-        <div class="daynum">${d.day}</div>
-      </th>`,
+        <th class="day${isWeekend(d) ? " we" : ""}">
+          <span class="weekday">${escapeHtml(d.weekday.slice(0, 2).toUpperCase())}</span>
+          <span class="daynum">${d.day}</span>
+        </th>`,
     )
     .join("");
 
@@ -89,6 +134,7 @@ export function printSchedule({
           const st = lookup[`${emp.id}|${d.iso}`];
 
           let cls = "cell";
+          if (isWeekend(d)) cls += " we";
           if (st && shiftClass.has(st)) cls += ` ${shiftClass.get(st)}`;
 
           return `<td class="${cls}">${escapeHtml(st || "")}</td>`;
@@ -105,14 +151,14 @@ export function printSchedule({
         <tr>
           <td class="num">${i + 1}</td>
           <td class="name">
-<div class="ename">${escapeHtml(emp.name)}</div>
-<div class="role">${escapeHtml(emp.role)}</div>
-</td>
+            <div class="ename">${escapeHtml(emp.name)}</div>
+            ${emp.role ? `<div class="role">${escapeHtml(emp.role)}</div>` : ""}
+          </td>
           ${cells}
-          <td class="cell sum il">${leave || ""}</td>
-          <td class="cell sum present">${present || ""}</td>
-          <td class="cell sum off">${off || ""}</td>
-          <td class="cell sum total">${total || ""}</td>
+          <td class="sum first leave">${leave || ""}</td>
+          <td class="sum present">${present || ""}</td>
+          <td class="sum off">${off || ""}</td>
+          <td class="sum total">${total || ""}</td>
         </tr>`;
     })
     .join("");
@@ -124,12 +170,9 @@ export function printSchedule({
         const st = lookup[`${emp.id}|${d.iso}`];
         if (isWorking(st, isLeave)) count++;
       }
-      return `<td class="cell total">${count}</td>`;
+      return `<td class="count${isWeekend(d) ? " we" : ""}">${count}</td>`;
     })
     .join("");
-
-  const halfLabel =
-    half === 1 ? "1st Period (27 – 11)" : "2nd Period (12 – 26)";
 
   // The department's own signatory, else the "All departments" default.
   const prepared = deptConfig?.prepared_by_name
@@ -137,6 +180,30 @@ export function printSchedule({
     : sig.default_prepared_by_name
       ? { name: sig.default_prepared_by_name, title: sig.default_prepared_by_title }
       : null;
+
+  const signers = [
+    { role: "Prepared by", name: prepared?.name, title: prepared?.title },
+    { role: "Checked by", name: sig.checked_by_name, title: sig.checked_by_title },
+    { role: "Approved by", name: sig.approved_by_name, title: sig.approved_by_title },
+  ];
+
+  const signoff = signers
+    .map(
+      (s) => `
+      <div class="sig">
+        <div class="sig-role">${s.role}</div>
+        <div class="sig-line"></div>
+        <div class="sig-name">${s.name ? escapeHtml(s.name) : "&nbsp;"}</div>
+        <div class="sig-title">${
+          s.title
+            ? escapeHtml(s.title)
+            : s.name
+              ? "&nbsp;"
+              : "Signature over printed name"
+        }</div>
+      </div>`,
+    )
+    .join("");
 
   const usedCodes = new Set();
   const halfDaySetLocal = new Set(days.map((d) => d.iso));
@@ -161,307 +228,373 @@ export function printSchedule({
     .map((code) => resolveShift(settings, code, dept))
     .filter(Boolean);
 
+  const legend = legendItems
+    .map(
+      (s) => `
+        <span class="chip">
+          <span class="swatch ${shiftClass.get(s.code) || ""}">${escapeHtml(s.code)}</span>
+          <span class="chip-text">
+            <span class="chip-label">${escapeHtml(s.label)}</span>${
+              s.time ? `<span class="chip-time">${escapeHtml(s.time)}</span>` : ""
+            }
+          </span>
+        </span>`,
+    )
+    .join("");
+
   const html = `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Schedule — ${escapeHtml(deptLabel)} — ${MONTHS[month - 1]} ${year}</title>
+<title>Work Schedule — ${escapeHtml(deptLabel)} — ${escapeHtml(rangeDates || `${MONTHS[month - 1]} ${year}`)}</title>
 <style>
+  /* Landscape on whatever paper is chosen. */
+  @page {
+    size: landscape;
+    margin: 8mm 7mm;
+  }
+
+  :root {
+    --ink: #111827;
+    --muted: #4b5563;
+    --faint: #6b7280;
+    --line: #c3c8cf;
+    --grid: #8b94a1;
+    --frame: #1f2937;
+    --brand: #166534;
+    --brand-soft: #ecfdf3;
+    --weekend: #f4f5f7;
+  }
+
   * { box-sizing: border-box; }
   html, body {
     margin: 0;
     padding: 0;
-    font-family: "Segoe UI", Arial, sans-serif;
-    color: #000;
     background: #fff;
-    font-size: 10pt;
+    color: var(--ink);
+    font-family: "Segoe UI", "Helvetica Neue", Arial, "Liberation Sans", sans-serif;
+    font-size: 8pt;
+    line-height: 1.25;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-
-  html, body, table, td, th, .header, .infobar, .signatures {
+  * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    color-adjust: exact !important;
   }
 
-  .page { padding: 4mm 5mm; width: 100%; }
-
-  .header { text-align: center; margin-bottom: 2mm; }
-  .header img {
+  /* ---------- Banner + title block ---------- */
+  .banner { text-align: center; margin-bottom: 2.5mm; }
+  .banner img {
     display: block;
     margin: 0 auto;
-    width: 100%;
-    max-width: 320mm;
-    max-height: 45mm;
+    max-width: 100%;
+    max-height: 22mm;
     object-fit: contain;
   }
 
-  .infobar {
+  .doc-head {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 3mm;
-    padding: 2mm 0;
-    border-top: 1.5px solid #15803d;
-    border-bottom: 1.5px solid #15803d;
+    gap: 8mm;
+    padding-bottom: 2mm;
+    border-bottom: 1.5pt solid var(--brand);
   }
-  .legend-inline {
+  .eyebrow {
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brand);
+  }
+  .doc-title {
+    margin: 0.6mm 0 0;
+    font-size: 17pt;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1.05;
+  }
+  .doc-sub {
+    margin-top: 0.8mm;
+    font-size: 9pt;
+    color: var(--muted);
+  }
+  .doc-sub strong { color: var(--ink); font-weight: 700; }
+
+  .meta {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 1.5mm 4mm;
-    padding: 0 4mm;
-    flex: 1;
+    margin: 0;
+    border: 1pt solid var(--frame);
+    border-radius: 1.5mm;
   }
-  .legend-item {
+  .meta div { padding: 1.4mm 3.5mm; }
+  .meta div + div { border-left: 0.75pt solid var(--grid); }
+  .meta dt {
+    font-size: 6pt;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .meta dd {
+    margin: 0.3mm 0 0;
+    font-size: 10pt;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  /* ---------- Legend ---------- */
+  .legend {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.5mm 4.5mm;
+    padding: 2mm 0;
+    margin-bottom: 2mm;
+    border-bottom: 0.75pt solid var(--line);
+  }
+  .legend-title {
+    font-size: 6.5pt;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-right: 1mm;
+  }
+  .chip {
     display: inline-flex;
     align-items: center;
     gap: 1.5mm;
-    font-size: 8pt;
+    white-space: nowrap;
   }
-  .legend-code {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 9mm;
-    height: 5mm;
-    padding: 0 1.5mm;
+  .swatch {
+    display: inline-block;
+    min-width: 8mm;
+    padding: 0.5mm 1.2mm;
     border-radius: 1mm;
-    font-weight: 800;
-    font-size: 7pt;
-    color: #111;
-    border: 1px solid #cbd5e1;
-  }
-  .legend-text { color: #111; white-space: nowrap; }
-
-  .month-title {
-    font-size: 18pt;
-    font-weight: 800;
-    letter-spacing: 1px;
-    color: #15803d;
-    text-transform: uppercase;
-    line-height: 1;
-  }
-  .info-right {
-    text-align: right;
-    line-height: 1.3;
-    font-size: 9.5pt;
-  }
-  .info-right .line1 { font-weight: 700; font-size: 10pt; }
-  .info-right .line2 { font-size: 9pt; font-weight: 700; }
-  .info-right strong { color: #15803d; font-weight: 800; }
-  .info-right .line2 strong { color: #111; }
-  .info-right .line2 .value { color: #15803d; font-weight: 800; }
-
-  table {
-    border-collapse: collapse;
-    table-layout: fixed;
-    width: 100%;
-  }
-  th, td {
-    border: 1px solid #111;
     text-align: center;
-    padding: 1px 0;
-    vertical-align: middle;
+    font-size: 7pt;
+    font-weight: 800;
+    background: #f3f4f6;
+    color: var(--ink);
+  }
+  .chip-label { font-size: 7.5pt; font-weight: 600; }
+  .chip-time { font-size: 7pt; color: var(--faint); margin-left: 1.2mm; }
+
+  /* ---------- Schedule table ---------- */
+  table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    border: 1.5pt solid var(--frame);
   }
   thead { display: table-header-group; }
-  thead th { background: #e8f5e9; font-weight: 700; }
-  th.day { padding: 1px; }
-  th.day .weekday {
-    font-size: 6.5pt; color: #555;
-    font-weight: 600; letter-spacing: 0.3px;
-  }
-  th.day .daynum { font-size: 10pt; }
+  tfoot { display: table-row-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
 
-  th.num-h, td.num {
-    background: #f1f5f1;
-    font-weight: 700;
-    font-size: 9pt;
+  th, td {
+    border: 0.75pt solid var(--grid);
+    padding: 0;
+    text-align: center;
+    vertical-align: middle;
   }
-  th.name-h, td.name {
+
+  thead th { background: #fff; font-weight: 700; }
+  thead tr:last-child th { border-bottom: 1.25pt solid var(--frame); }
+  th.corner {
+    font-size: 6.5pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    vertical-align: bottom;
+    padding-bottom: 1mm;
+  }
+  th.corner.name-h { text-align: left; padding-left: 1.6mm; }
+  th.month {
+    font-size: 6.5pt;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     text-align: left;
-    padding-left: 5px;
-    background: #fafdfa;
+    padding: 0.7mm 1.2mm;
+    color: var(--brand);
   }
-  .ename {
+  th.day { padding: 0.6mm 0 0.8mm; }
+  th.day .weekday {
+    display: block;
+    font-size: 5.5pt;
     font-weight: 700;
-    font-size: 9pt;
-    line-height: 1.15;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    letter-spacing: 0.06em;
+    color: var(--faint);
   }
-  .role {
-    font-size: 7.5pt;
-    color: #555;
+  th.day .daynum {
+    display: block;
+    font-size: 9.5pt;
+    font-weight: 800;
     line-height: 1.1;
+  }
+  th.day.we { background: var(--weekend); }
+  th.day.we .weekday { color: #b91c1c; }
+
+  td.num {
+    font-size: 6.5pt;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+  }
+  td.name {
+    text-align: left;
+    padding: 0.6mm 1.6mm;
+    overflow: hidden;
+  }
+  .ename, .role {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .ename { font-size: 7.8pt; font-weight: 700; line-height: 1.15; }
+  .role { font-size: 6pt; color: var(--faint); line-height: 1.15; }
 
   td.cell {
-    height: 20px;
-    min-height: 20px;
-    font-weight: 700;
-    font-size: 9pt;
+    height: 6mm;
+    font-size: 7.5pt;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    overflow: hidden;
     background: #fff;
-    color: #111;
   }
-
-  td.cell.total     { background: #e8f5e9 !important; color: #166534 !important; }
+  td.cell.we { background: var(--weekend); }
 ${shiftCss}
 
+  /* Totals: secondary but readable. */
   th.sum-h {
-    font-weight: 800;
-    font-size: 7pt;
-    padding: 2px 2px;
-    white-space: normal;
-    line-height: 1.05;
-    word-break: break-word;
-  }
-  td.sum { font-weight: 800; font-size: 9pt; padding: 1px 2px; }
-
-  th.sum-h.il-h      { background: #d1fae5 !important; color: #065f46 !important; }
-  th.sum-h.present-h { background: #dcfce7 !important; color: #166534 !important; }
-  th.sum-h.off-h     { background: #ffe4e6 !important; color: #be123c !important; }
-  th.sum-h.total-h   { background: #e2e8f0 !important; color: #1e293b !important; }
-
-  td.sum.il      { background: #ecfdf5 !important; color: #065f46 !important; }
-  td.sum.present { background: #f0fdf4 !important; color: #166534 !important; }
-  td.sum.off     { background: #fff1f2 !important; color: #be123c !important; }
-  td.sum.total   { background: #f1f5f9 !important; color: #1e293b !important; }
-
-  tfoot { display: table-row-group; }
-  tfoot td {
-    background: #e8f5e9 !important;
+    font-size: 5.5pt;
     font-weight: 700;
-    padding: 3px 2px;
+    letter-spacing: 0.05em;
+    line-height: 1.1;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0.8mm 0.5mm;
+    background: #f9fafb;
   }
-  tfoot td.num, tfoot td.name {
-    text-align: right;
-    font-size: 8.5pt;
-    letter-spacing: 0.4px;
+  th.sum-h.first, td.sum.first, tfoot td.sum.first { border-left: 1.25pt solid var(--frame); }
+  td.sum {
+    font-size: 7.5pt;
+    font-weight: 600;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
   }
-  tfoot td.sum { background: #d1fae5 !important; font-weight: 800; }
-  tfoot td.sum.il { background: #d1fae5 !important; }
-  tfoot td.sum.off { background: #ffe4e6 !important; }
-  tfoot td.sum.total { background: #e2e8f0 !important; }
+  td.sum.leave { color: #047857; }
+  td.sum.off { color: #be123c; }
+  td.sum.total { color: var(--ink); font-weight: 800; background: #f9fafb; }
 
-  tr { page-break-inside: avoid; }
+  /* Daily manpower: the summary row. */
+  tr.manpower td {
+    background: var(--brand-soft);
+    border-top: 1.25pt solid var(--brand);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    padding: 1mm 0;
+  }
+  tr.manpower td.label {
+    text-align: left;
+    padding-left: 1.6mm;
+    font-size: 6.5pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--brand);
+  }
+  tr.manpower td.count { font-size: 8pt; color: var(--brand); }
+  tr.manpower td.sum { font-size: 8pt; }
+  tr.manpower td.sum.total { background: #dcfce7; }
 
-  .signatures {
+  /* ---------- Sign-off ---------- */
+  .signoff {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 12mm;
-    margin-top: 6mm;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14mm;
+    margin-top: 7mm;
+    break-inside: avoid;
     page-break-inside: avoid;
   }
-  .sig { text-align: left; }
-  .sig .label-top {
-    font-size: 9pt;
-    color: #111;
-    margin-bottom: 0;
-    white-space: nowrap;
-  }
-  .sig .sign-space { height: 22px; }
-  .sig .name {
-    font-weight: 800;
-    font-size: 9pt;
+  .sig-role {
+    font-size: 6.5pt;
+    font-weight: 700;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-    text-decoration-thickness: 1px;
-    color: #111;
-    display: block;
-    line-height: 1.2;
-    white-space: normal;
-    word-break: keep-all;
+    color: var(--faint);
   }
-  .sig .title {
-    font-size: 8pt;
-    color: #111;
-    margin-top: 2px;
-    font-weight: 500;
-    white-space: nowrap;
+  .sig-line { height: 11mm; border-bottom: 0.75pt solid var(--ink); }
+  .sig-name {
+    margin-top: 1mm;
+    font-size: 8.5pt;
+    font-weight: 800;
+    text-transform: uppercase;
+    text-align: center;
   }
-
-  @page { size: 13in 8.5in; margin: 6mm 5mm; }
-  @media print {
-    html, body { background: #fff; }
-    .page { padding: 0; }
+  .sig-title {
+    font-size: 7pt;
+    color: var(--muted);
+    text-align: center;
   }
 </style>
 </head>
 <body>
-<div class="page">
-  <div class="header">
-<img
-  src="${bannerUrl}"
-  alt="${escapeHtml(deptLabel)}"
-  onerror="this.style.display='none'; console.error('Print logo failed to load:', this.src);"
-/>
-</div>
-
-  <div class="infobar">
-    <div class="month-title">${escapeHtml(rangeTitle)}</div>
-
-    <div class="legend-inline">
-      ${legendItems
-        .map(
-          (s) => `
-        <span class="legend-item">
-          <span class="legend-code ${shiftClass.get(s.code) || ""}">${escapeHtml(s.code)}</span>
-<span class="legend-text">
-${escapeHtml(s.label)}${s.time ? ` — ${escapeHtml(s.time)}` : ""}
-</span>
-        </span>`,
-        )
-        .join("")}
-    </div>
-
-    <div class="info-right">
-      <div class="line1">Department: <strong>${escapeHtml(deptLabel)}</strong></div>
-      <div class="line2">
-        <strong>Period:</strong> <span class="value">${escapeHtml(halfLabel)}</span>
-        &nbsp;•&nbsp;
-        <strong>Employees:</strong> <span class="value">${visibleEmployees.length}</span>
-      </div>
-    </div>
+  <div class="banner">
+    <img
+      src="${bannerUrl}"
+      alt="${escapeHtml(deptLabel)}"
+      onerror="this.parentNode.style.display='none'; console.error('Print logo failed to load:', this.src);"
+    />
   </div>
+
+  <header class="doc-head">
+    <div>
+      <div class="eyebrow">Employee Work Schedule</div>
+      <h1 class="doc-title">${escapeHtml(rangeTitle)}</h1>
+      <div class="doc-sub"><strong>${escapeHtml(rangeDates)}</strong> · ${halfLabel} (${halfDays})</div>
+    </div>
+    <dl class="meta">
+      <div><dt>Department</dt><dd>${escapeHtml(deptLabel)}</dd></div>
+      <div><dt>Payroll period</dt><dd>${half === 1 ? "1st" : "2nd"}</dd></div>
+      <div><dt>Employees</dt><dd>${visibleEmployees.length}</dd></div>
+    </dl>
+  </header>
+
+  ${legendItems.length ? `<div class="legend"><span class="legend-title">Legend</span>${legend}</div>` : ""}
 
   <table>
     <colgroup>
-      <col style="width:3%" />
-      <col style="width:13%" />
-      ${days.map(() => `<col style="width:3%" />`).join("")}
-      <col style="width:6%" />
-      <col style="width:6%" />
-      <col style="width:6%" />
-      <col style="width:6%" />
+      <col style="width:${NUM_W}%" />
+      <col style="width:${NAME_W}%" />
+      ${days.map(() => `<col style="width:${dayW.toFixed(3)}%" />`).join("")}
+      <col style="width:${SUM_W}%" />
+      <col style="width:${SUM_W}%" />
+      <col style="width:${SUM_W}%" />
+      <col style="width:${SUM_W}%" />
     </colgroup>
     <thead>
       <tr>
-        <th class="num-h">#</th>
-        <th class="name-h">NAME</th>
-        ${dayHeaders}
-        <th class="sum-h il-h">LEAVE</th>
-        <th class="sum-h present-h">PHYSICAL<br>PRESENT</th>
-        <th class="sum-h off-h">PHYSICAL<br>OFF</th>
-        <th class="sum-h total-h">TOTAL<br>WORKING<br>DAYS</th>
+        <th class="corner" rowspan="2">#</th>
+        <th class="corner name-h" rowspan="2">Employee</th>
+        ${monthHeaders}
+        <th class="sum-h first" rowspan="2">Leave</th>
+        <th class="sum-h" rowspan="2">Physical<br>Present</th>
+        <th class="sum-h" rowspan="2">Physical<br>Off</th>
+        <th class="sum-h" rowspan="2">Total<br>Working<br>Days</th>
       </tr>
+      <tr>${dayHeaders}</tr>
     </thead>
     <tbody>
       ${rows}
     </tbody>
     <tfoot>
-      <tr>
-        <td class="num"></td>
-        <td class="name">TOTAL MANPOWER OF THE DAY</td>
+      <tr class="manpower">
+        <td class="label" colspan="2">Daily manpower</td>
         ${dailyTotals}
-        <td class="sum il">${grandLeave}</td>
+        <td class="sum first leave">${grandLeave}</td>
         <td class="sum present">${grandPresent}</td>
         <td class="sum off">${grandOff}</td>
         <td class="sum total">${grandTotalDays}</td>
@@ -469,32 +602,7 @@ ${escapeHtml(s.label)}${s.time ? ` — ${escapeHtml(s.time)}` : ""}
     </tfoot>
   </table>
 
-  <div class="signatures">
-    <div class="sig">
-      <div class="label-top">Prepared by:</div>
-      <div class="sign-space"></div>
-      ${
-        prepared
-          ? `<div class="name">${escapeHtml(prepared.name)}</div>
-           <div class="title">${escapeHtml(prepared.title)}</div>`
-          : `<div class="name">&nbsp;</div>
-           <div class="title">&nbsp;</div>`
-      }
-    </div>
-    <div class="sig">
-      <div class="label-top">Checked by:</div>
-      <div class="sign-space"></div>
-      <div class="name">${escapeHtml(sig.checked_by_name) || "&nbsp;"}</div>
-      <div class="title">${escapeHtml(sig.checked_by_title) || "&nbsp;"}</div>
-    </div>
-    <div class="sig">
-      <div class="label-top">Approved by:</div>
-      <div class="sign-space"></div>
-      <div class="name">${escapeHtml(sig.approved_by_name) || "&nbsp;"}</div>
-      <div class="title">${escapeHtml(sig.approved_by_title) || "&nbsp;"}</div>
-    </div>
-  </div>
-</div>
+  <section class="signoff">${signoff}</section>
 </body>
 </html>`;
 
@@ -525,7 +633,11 @@ ${escapeHtml(s.label)}${s.time ? ` — ${escapeHtml(s.time)}` : ""}
       ),
     );
 
+  // Runs once: both the load event and the fallback timer can call it.
+  let started = false;
   const ready = () => {
+    if (started) return;
+    started = true;
     waitForImages().then(() => {
       setTimeout(() => {
         try {
