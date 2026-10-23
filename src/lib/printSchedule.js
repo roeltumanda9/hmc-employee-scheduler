@@ -556,7 +556,7 @@ ${shiftCss}
     </div>
     <dl class="meta">
       <div><dt>Department</dt><dd>${escapeHtml(deptLabel)}</dd></div>
-      <div><dt>Payroll period</dt><dd>${half === 1 ? "1st" : "2nd"}</dd></div>
+      <div><dt>Period</dt><dd>${half === 1 ? "1st" : "2nd"}</dd></div>
       <div><dt>Employees</dt><dd>${visibleEmployees.length}</dd></div>
     </dl>
   </header>
