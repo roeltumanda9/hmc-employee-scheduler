@@ -60,6 +60,15 @@ export async function testEmployeeIds() {
   return rows.map((r) => r.id);
 }
 
+export const historyMissing = (error) => error?.code === "PGRST205" || error?.code === "42P01";
+
+/** True once supabase/proposed_schedule_history.sql has been run. */
+export async function historyInstalled() {
+  const c = await db();
+  const { error } = await c.from("schedule_history").select("id").limit(1);
+  return !historyMissing(error);
+}
+
 /** Removes all test data. Safe to run when there is none. */
 export async function cleanup() {
   const c = await db();
@@ -67,6 +76,15 @@ export async function cleanup() {
   if (ids.length) {
     check(await c.from("schedules").delete().in("employee_id", ids), "Delete test schedules");
     check(await c.from("employees").delete().in("id", ids), "Delete test employees");
+  }
+  // History of the test employees (only these rows may be deleted, see
+  // supabase/proposed_schedule_history.sql). Skipped while the table is missing.
+  const history = await c
+    .from("schedule_history")
+    .delete()
+    .like("employee_name", `${TEST_LAST_NAME}, %`);
+  if (history.error && !historyMissing(history.error)) {
+    check(history, "Delete test history");
   }
   check(await c.from("departments").delete().eq("name", TEST_DEPARTMENT), "Delete test department");
 }

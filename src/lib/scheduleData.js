@@ -51,6 +51,30 @@ export function fetchLeaveRows(fromIso, toIso, codes, employeeIds) {
   });
 }
 
+export const HISTORY_LIMIT = 500;
+
+/**
+ * Change history (supabase/proposed_schedule_history.sql) for shifts dated
+ * between two ISO dates, optionally for some employees; newest change first,
+ * at most HISTORY_LIMIT rows. `missing` is true while the table isn't
+ * installed yet.
+ */
+export async function fetchScheduleHistory(firstIso, lastIso, employeeIds) {
+  let q = supabase
+    .from("schedule_history")
+    .select("*")
+    .gte("date", firstIso)
+    .lte("date", lastIso)
+    .order("changed_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(HISTORY_LIMIT);
+  if (employeeIds) q = q.in("employee_id", employeeIds);
+  const { data, error } = await q;
+  // PGRST205 / 42P01: the table doesn't exist (SQL not run yet).
+  const missing = error?.code === "PGRST205" || error?.code === "42P01";
+  return { data, error: missing ? null : error, missing };
+}
+
 function chunk(list, size) {
   const out = [];
   for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));

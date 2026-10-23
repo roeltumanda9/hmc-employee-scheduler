@@ -36,6 +36,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import DepartmentDropdown from "../components/DepartmentDropdown";
 import ErrorBanner from "../components/ErrorBanner";
 import GridSkeleton from "../components/GridSkeleton";
+import HistoryModal from "../components/HistoryModal";
 import Icon from "../components/Icon";
 import { BTN, BTN_SIZE, CARD, SPINNER_ON_BRAND } from "../lib/ui";
 
@@ -80,6 +81,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   const [discardAction, setDiscardAction] = useState(null);
   // Save waiting on "someone else changed these cells" confirmation.
   const [conflict, setConflict] = useState(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const loadSeq = useRef(0);
 
   const [month, setMonth] = useState(() => savedMonth(isAllowed)?.month ?? todayMonth);
@@ -144,6 +146,12 @@ export default function SchedulerPage({ role, onDirtyChange }) {
     if (isAllDepts) return employees;
     return employees.filter((e) => e.department === dept);
   }, [employees, dept, isAllDepts]);
+
+  // History covers the employees on screen; "All departments" shows everyone.
+  const historyEmployeeIds = useMemo(
+    () => (isAllDepts ? null : visibleEmployees.map((e) => e.id)),
+    [isAllDepts, visibleEmployees],
+  );
 
   const firstIso = days[0]?.iso;
   const lastIso = days[days.length - 1]?.iso;
@@ -565,7 +573,9 @@ export default function SchedulerPage({ role, onDirtyChange }) {
           {!editing && (
             <div
               className={`grid gap-2 sm:gap-2.5 lg:flex lg:items-center lg:ml-auto ${
-                showEditAction ? "grid-cols-2" : "grid-cols-1"
+                ["grid-cols-1", "grid-cols-2", "grid-cols-3"][
+                  Number(canEdit) + Number(showEditAction)
+                ]
               }`}
             >
               <button
@@ -578,6 +588,18 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                 {/* Icon-only on laptops to keep the toolbar on one row. */}
                 <span className="lg:sr-only 2xl:not-sr-only">Print</span>
               </button>
+
+              {canEdit && (
+                <button
+                  onClick={() => setHistoryOpen(true)}
+                  disabled={visibleEmployees.length === 0}
+                  className={`${BTN.secondary} ${BTN_SIZE.md} sm:h-11 lg:h-10 lg:w-10 lg:px-0 2xl:w-auto 2xl:px-4`}
+                  title="Who changed this schedule, and when"
+                >
+                  <Icon name="clock" size={16} />
+                  <span className="lg:sr-only 2xl:not-sr-only">History</span>
+                </button>
+              )}
 
               {showEditAction && (
                 <button
@@ -857,6 +879,16 @@ export default function SchedulerPage({ role, onDirtyChange }) {
         }}
         onCancel={() => setConflict(null)}
       />
+
+      {historyOpen && (
+        <HistoryModal
+          firstIso={firstIso}
+          lastIso={lastIso}
+          employeeIds={historyEmployeeIds}
+          subtitle={`${isAllDepts ? "All departments" : dept} · ${periodTitle(days, month, year)} (${half === 1 ? "1st" : "2nd"} period)`}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -33,11 +33,12 @@ test("admin can edit schedules but has no Settings page", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
 });
 
-test("user is read-only: no Edit button and no Settings page", async ({ page }) => {
+test("user is read-only: no Edit, History or Settings", async ({ page }) => {
   test.skip(!USER, "E2E_USER_EMAIL / E2E_USER_PASSWORD not set");
   await signIn(page, USER, { start: "scheduler" });
 
   await expect(page.getByRole("region", { name: "Schedule grid" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "History" })).toHaveCount(0);
   await expect(nav(page).getByRole("button", { name: "Settings" })).toHaveCount(0);
 });

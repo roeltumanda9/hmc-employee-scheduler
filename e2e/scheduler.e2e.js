@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { getPayrollPeriodDays, previousPeriod, sameWeekdayIn } from "../src/lib/dates.js";
 import { MAX_LEAVE_DAYS_PER_YEAR } from "../src/lib/leave.js";
-import { fixture, fullName, savedStatus, setSchedule } from "./db.js";
+import { fixture, fullName, historyInstalled, savedStatus, setSchedule } from "./db.js";
 import { SUPER_ADMIN } from "./env.js";
 import { cell, defaultPeriodDays, pickShift, signIn, startEditing } from "./helpers.js";
 
@@ -36,6 +36,24 @@ test("edit a shift, save, and it is still there after a reload", async ({ page }
   await page.reload();
   await expect(cell(page, ALPHA, day)).toContainText(fx.work);
   await expect(cell(page, ALPHA, day)).not.toHaveAccessibleName(/\(unsaved\)$/);
+});
+
+test("History shows a saved change and who made it", async ({ page }) => {
+  test.skip(!(await historyInstalled()), "supabase/proposed_schedule_history.sql not run yet");
+  const day = days[4];
+  await startEditing(page);
+  await pickShift(page, ALPHA, day, fx.work);
+  await page.getByRole("button", { name: /^Save/ }).click();
+  await expect(page.getByText("Schedule saved")).toBeVisible();
+
+  await page.getByRole("button", { name: "History" }).click();
+  const dialog = page.getByRole("dialog", { name: "Change history" });
+  const entry = dialog.getByRole("listitem").filter({ hasText: ALPHA }).first();
+  await expect(entry).toContainText(fx.work);
+  await expect(entry).toContainText(SUPER_ADMIN.email);
+
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await expect(dialog).toHaveCount(0);
 });
 
 test("Cancel throws away unsaved edits", async ({ page }) => {
