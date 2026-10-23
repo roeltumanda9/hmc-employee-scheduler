@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { deleteEmployee, fetchEmployees, sortByNumber } from "../lib/employeeData";
+import { fetchLeaveRows } from "../lib/scheduleData";
 import { departmentNames, leaveTypes, useSettings } from "../lib/settings";
 import EmployeeForm from "../components/EmployeeForm";
 import ConfirmModal from "../components/ConfirmModal";
@@ -35,26 +36,6 @@ const SHORT_MONTHS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-// Leave days of the given codes in `year`. Supabase returns at most 1000 rows
-// per request, so page through.
-async function fetchLeaveDays(codes, year) {
-  const PAGE = 1000;
-  const rows = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("schedules")
-      .select("employee_id, date, status")
-      .in("status", codes)
-      .gte("date", `${year}-01-01`)
-      .lte("date", `${year}-12-31`)
-      .order("date")
-      .range(from, from + PAGE - 1);
-    if (error) return { data: null, error };
-    rows.push(...data);
-    if (data.length < PAGE) return { data: rows, error: null };
-  }
-}
-
 // rows → { [employeeId]: { [code]: [iso, ...] } }
 function groupLeave(rows) {
   const out = {};
@@ -84,29 +65,31 @@ export default function EmployeesPage({ role }) {
   const [deptFilter, setDeptFilter] = useState("all");
   const [error, setError] = useState("");
 
-  async function loadEmployees() {
-    setLoading(true);
-    const { data, error } = await supabase.from("employees").select("*");
-
+  function applyEmployees({ data, error }) {
     if (error) {
       setError(friendlyError(error, "load employees"));
     } else {
       setError("");
-      const sorted = [...data].sort((a, b) => {
-        const na = parseInt(a.number, 10);
-        const nb = parseInt(b.number, 10);
-        if (isNaN(na) && isNaN(nb)) return 0;
-        if (isNaN(na)) return 1;
-        if (isNaN(nb)) return -1;
-        return na - nb;
-      });
-      setEmployees(sorted);
+      setEmployees(sortByNumber(data));
     }
     setLoading(false);
   }
 
+  // Reload after an add / edit / delete.
+  async function loadEmployees() {
+    setLoading(true);
+    applyEmployees(await fetchEmployees());
+  }
+
+  // First load (`loading` starts true).
   useEffect(() => {
-    loadEmployees();
+    let active = true;
+    fetchEmployees().then((res) => {
+      if (active) applyEmployees(res);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // This year's leave days per employee, from the saved schedules:
@@ -119,7 +102,11 @@ export default function EmployeesPage({ role }) {
   useEffect(() => {
     if (!leaveKey) return;
     let active = true;
-    fetchLeaveDays(leaveKey.split(","), leaveYear).then(({ data, error }) => {
+    fetchLeaveRows(
+      `${leaveYear}-01-01`,
+      `${leaveYear}-12-31`,
+      leaveKey.split(","),
+    ).then(({ data, error }) => {
       if (!active) return;
       if (error) setError(friendlyError(error, "load the leave totals"));
       else setLeaveByEmployee(groupLeave(data));
@@ -132,7 +119,7 @@ export default function EmployeesPage({ role }) {
   async function handleDelete(id) {
     if (!canManage || !id) return;
 
-    const { error } = await supabase.from("employees").delete().eq("id", id);
+    const { error } = await deleteEmployee(id);
 
     setConfirmId(null);
 
@@ -217,9 +204,10 @@ export default function EmployeesPage({ role }) {
     <div className="space-y-4 sm:space-y-6">
       <ErrorBanner message={error} onDismiss={() => setError("")} />
 
-      {canManage && (
+      {/* Mounted only while open, so each opening starts from a fresh form. */}
+      {canManage && formOpen && (
         <EmployeeForm
-          open={formOpen}
+          key={editing?.id ?? "new"}
           editing={editing}
           onDone={() => {
             closeForm();

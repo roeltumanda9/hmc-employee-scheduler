@@ -15,10 +15,10 @@ import { BTN, BTN_SIZE, CARD, EYEBROW, SPINNER } from "./lib/ui";
 
 export default function App() {
   const [session, setSession] = useState(null);
-  const [profile, setProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [profileError, setProfileError] = useState("");
+  // Outcome of loading a user's profile: { userId, profile, error }. Tied to
+  // the user it was loaded for, so a stale result never shows for another.
+  const [profileResult, setProfileResult] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   // True while the scheduler holds unsaved edits; guards page switches.
@@ -60,11 +60,9 @@ export default function App() {
       setSession(nextSession);
 
       if (!nextSession || event === "SIGNED_OUT") {
-        setProfile(null);
+        setProfileResult(null);
         // Drop loaded settings so staff names don't linger in memory.
         setSettings(DEFAULT_SETTINGS);
-        setProfileLoading(false);
-        setProfileError("");
         setConfirmSignOut(false);
         setSidebarOpen(false);
       }
@@ -79,8 +77,7 @@ export default function App() {
         if (error) {
           console.error("Failed to restore session:", error);
           setSession(null);
-          setProfile(null);
-          setProfileError("");
+          setProfileResult(null);
           return;
         }
 
@@ -90,7 +87,7 @@ export default function App() {
 
         console.error("Authentication initialization failed:", error);
         setSession(null);
-        setProfile(null);
+        setProfileResult(null);
       } finally {
         if (active) {
           setAuthLoading(false);
@@ -109,72 +106,59 @@ export default function App() {
   // --- Load the signed-in user's profile ---
   const sessionUserId = session?.user?.id;
 
+  const result = profileResult?.userId === sessionUserId ? profileResult : null;
+  const profile = result?.profile ?? null;
+  const profileError = result?.error ?? "";
+  const profileLoading = !!sessionUserId && !result;
+
   useEffect(() => {
+    if (!sessionUserId) return;
     let active = true;
+    const finish = (userProfile, error = "") =>
+      setProfileResult({ userId: sessionUserId, profile: userProfile, error });
 
-    if (!sessionUserId) {
-      setProfile(null);
-      setProfileLoading(false);
-      setProfileError("");
-      return;
-    }
-
-    async function loadProfile() {
-      setProfileLoading(true);
-      setProfileError("");
-      setProfile(null);
-
-      try {
-        const userProfile = await getMyProfile();
-
+    getMyProfile()
+      .then((userProfile) => {
         if (!active) return;
 
         if (!userProfile) {
-          setProfileError(
+          finish(
+            null,
             "Your profile could not be loaded. Please sign in again or contact your administrator.",
           );
           return;
         }
 
         if (userProfile.id !== sessionUserId) {
-          setProfileError(
+          finish(
+            null,
             "Your profile does not match the current session. Please sign in again.",
           );
           return;
         }
 
-        setProfile(userProfile);
-      } catch (error) {
+        finish(userProfile);
+        // Settings are read under RLS, so they load once the role is known.
+        // They're reset on sign-out in the auth handler above.
+        reloadSettings();
+      })
+      .catch((error) => {
         if (!active) return;
 
         console.error("Profile loading failed:", error);
-        setProfileError(
-          "An error occurred while loading your profile. Please try again.",
-        );
-      } finally {
-        if (active) {
-          setProfileLoading(false);
-        }
-      }
-    }
-
-    loadProfile();
+        finish(null, "An error occurred while loading your profile. Please try again.");
+      });
 
     return () => {
       active = false;
     };
-  }, [sessionUserId]);
+  }, [sessionUserId, reloadSettings]);
 
-  // Load settings once the profile (and so the role used by RLS) is known.
-  // They're reset on sign-out in the auth handler above.
-  const profileId = profile?.id;
-  useEffect(() => {
-    if (profileId) reloadSettings();
-  }, [profileId, reloadSettings]);
-
-  useEffect(() => {
+  // Switching pages also closes the mobile sidebar.
+  function showPage(id) {
+    setPage(id);
     setSidebarOpen(false);
-  }, [page]);
+  }
 
   useEffect(() => {
     localStorage.setItem("hmc_page", page);
@@ -199,7 +183,7 @@ export default function App() {
     if (id !== page && page === "scheduler" && schedulerDirty) {
       setPendingPage(id);
     } else {
-      setPage(id);
+      showPage(id);
     }
   }
 
@@ -241,9 +225,11 @@ export default function App() {
 
               if (error) {
                 console.error("Sign out failed:", error);
-                setProfileError(
-                  "Unable to sign out. Please refresh the page and try again.",
-                );
+                setProfileResult({
+                  userId: sessionUserId,
+                  profile: null,
+                  error: "Unable to sign out. Please refresh the page and try again.",
+                });
               }
             }}
             className={`${BTN.primary} ${BTN_SIZE.lg} mt-6 w-full`}
@@ -448,7 +434,7 @@ export default function App() {
         onConfirm={() => {
           const next = pendingPage;
           setPendingPage(null);
-          setPage(next);
+          showPage(next);
         }}
         onCancel={() => setPendingPage(null)}
       />
@@ -471,9 +457,7 @@ export default function App() {
 
           // Clear protected information immediately.
           setSession(null);
-          setProfile(null);
-          setProfileError("");
-          setProfileLoading(false);
+          setProfileResult(null);
           sessionStorage.removeItem("hmc_last_activity");
 
           const { error } = await supabase.auth.signOut({

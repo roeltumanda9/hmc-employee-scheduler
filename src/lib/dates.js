@@ -70,6 +70,12 @@ function toIso(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+/** (year, month) moved by `delta` months, as { year, month } (month 1–12). */
+export function addMonths(year, month, delta) {
+  const index = year * 12 + (month - 1) + delta;
+  return { year: Math.floor(index / 12), month: (index % 12) + 1 };
+}
+
 /** The payroll period before (year, month, half), as { year, month, half }. */
 export function previousPeriod(year, month, half) {
   if (half === 2) return { year, month, half: 1 };

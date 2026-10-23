@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  addMonths,
   getPayrollPeriodDays,
   periodTitle,
   previousPeriod,
@@ -122,5 +123,14 @@ describe("sameWeekdayIn (copy previous period)", () => {
         }
       }
     }
+  });
+});
+
+describe("addMonths", () => {
+  it("moves within a year and across year ends", () => {
+    expect(addMonths(2026, 10, 1)).toEqual({ year: 2026, month: 11 });
+    expect(addMonths(2026, 12, 1)).toEqual({ year: 2027, month: 1 });
+    expect(addMonths(2026, 1, -1)).toEqual({ year: 2025, month: 12 });
+    expect(addMonths(2026, 5, 0)).toEqual({ year: 2026, month: 5 });
   });
 });

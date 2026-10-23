@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "../lib/supabase";
 import {
   MONTHS,
+  addMonths,
   getPayrollPeriodDays,
   periodTitle,
   previousPeriod,
-  sameWeekdayIn,
 } from "../lib/dates";
 import {
-  departmentNames,
   findDepartment,
   findShift,
   leaveChecker,
@@ -19,157 +17,54 @@ import {
 import { canEditSchedules } from "../lib/auth";
 import { friendlyError } from "../lib/errors";
 import { countLeave, leaveStatusFor } from "../lib/leave";
-import { handleMenuKeyDown } from "../lib/useDialog";
+import { fetchEmployees } from "../lib/employeeData";
+import {
+  fetchLeaveRows,
+  fetchSchedules,
+  saveScheduleChanges,
+} from "../lib/scheduleData";
+import {
+  applyStatus,
+  cellKey,
+  countConflicts,
+  pendingRow,
+  pendingToChanges,
+  planCopy,
+} from "../lib/scheduleEdits";
 import ScheduleGrid from "../components/ScheduleGrid";
 import ConfirmModal from "../components/ConfirmModal";
+import DepartmentDropdown from "../components/DepartmentDropdown";
 import ErrorBanner from "../components/ErrorBanner";
+import GridSkeleton from "../components/GridSkeleton";
 import Icon from "../components/Icon";
-import {
-  BTN,
-  BTN_SIZE,
-  CARD,
-  MENU,
-  MENU_HEADING,
-  MENU_ITEM,
-  SPINNER,
-  SPINNER_ON_BRAND,
-} from "../lib/ui";
+import { BTN, BTN_SIZE, CARD, SPINNER_ON_BRAND } from "../lib/ui";
 
+// Months as one comparable number (2026-10 → 24318).
+const monthIndex = ({ year, month }) => year * 12 + month;
 
-// Supabase returns at most 1000 rows per request by default, so page through.
-const PAGE_SIZE = 1000;
-
-async function fetchSchedules(firstIso, lastIso, employeeIds) {
-  const rows = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    let q = supabase
-      .from("schedules")
-      .select("*")
-      .gte("date", firstIso)
-      .lte("date", lastIso)
-      .order("id")
-      .range(from, from + PAGE_SIZE - 1);
-    if (employeeIds) q = q.in("employee_id", employeeIds);
-    const { data, error } = await q;
-    if (error) return { data: null, error };
-    rows.push(...data);
-    if (data.length < PAGE_SIZE) return { data: rows, error: null };
-  }
-}
-
-// Leave rows (status in `codes`) for these employees between two dates.
-async function fetchLeaveRows(fromIso, toIso, employeeIds, codes) {
-  const rows = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from("schedules")
-      .select("employee_id, date, status")
-      .gte("date", fromIso)
-      .lte("date", toIso)
-      .in("status", codes)
-      .in("employee_id", employeeIds)
-      .order("id")
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) return { data: null, error };
-    rows.push(...data);
-    if (data.length < PAGE_SIZE) return { data: rows, error: null };
-  }
-}
-
-function rowsByKey(rows) {
-  const map = {};
-  for (const s of rows || []) {
-    const key = `${s.employee_id}|${s.date}`;
-    if (!map[key]) map[key] = [];
-    map[key].push(s);
-  }
-  return map;
-}
-
-function chunk(list, size) {
-  const out = [];
-  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
-  return out;
-}
-
-/**
- * Fallback save used until the `save_schedule_changes` database function is
- * installed. Works from fresh server rows (not the edit snapshot), so a retry
- * after a partial failure never inserts a second row for the same cell.
- * Not atomic: returns the first error, after which earlier batches are saved.
- */
-async function saveInBatches(changes, serverRows) {
-  const byKey = rowsByKey(serverRows);
-  const deleteIds = [];
-  const updates = {}; // status -> row ids
-  const inserts = [];
-
-  for (const { employee_id, date, status } of changes) {
-    const [keep, ...extra] = byKey[`${employee_id}|${date}`] || [];
-    // Extra rows for one cell are leftovers of earlier duplicate saves.
-    deleteIds.push(...extra.map((s) => s.id));
-
-    if (status === null) {
-      if (keep) deleteIds.push(keep.id);
-    } else if (!keep) {
-      inserts.push({ employee_id, date, status });
-    } else if (keep.status !== status) {
-      if (!updates[status]) updates[status] = [];
-      updates[status].push(keep.id);
-    }
-  }
-
-  // 100 ids per request keeps the URL well under length limits.
-  for (const ids of chunk(deleteIds, 100)) {
-    const { error } = await supabase.from("schedules").delete().in("id", ids);
-    if (error) return error;
-  }
-  for (const [status, allIds] of Object.entries(updates)) {
-    for (const ids of chunk(allIds, 100)) {
-      const { error } = await supabase
-        .from("schedules")
-        .update({ status })
-        .in("id", ids);
-      if (error) return error;
-    }
-  }
-  for (const rows of chunk(inserts, 500)) {
-    const { error } = await supabase.from("schedules").insert(rows);
-    if (error) return error;
-  }
-  return null;
+// The month/year remembered from the last visit, if it is still in range.
+function savedMonth(isAllowed) {
+  const month = parseInt(localStorage.getItem("hmc_sched_month"), 10);
+  const year = parseInt(localStorage.getItem("hmc_sched_year"), 10);
+  const valid =
+    month >= 1 && month <= 12 && year >= 2000 && year <= 2100 && isAllowed(year, month);
+  return valid ? { year, month } : null;
 }
 
 export default function SchedulerPage({ role, onDirtyChange }) {
   const canEdit = canEditSchedules(role);
   const settings = useSettings();
 
+  // Navigation is limited to the previous, current and next month.
   const today = new Date();
   const todayYear = today.getFullYear();
   const todayMonth = today.getMonth() + 1;
-
-  function monthOffset(delta) {
-    let m = todayMonth + delta;
-    let y = todayYear;
-    if (m < 1) {
-      m = 12;
-      y -= 1;
-    }
-    if (m > 12) {
-      m = 1;
-      y += 1;
-    }
-    return { year: y, month: m };
-  }
-
-  const PREV = monthOffset(-1);
-  const NEXT = monthOffset(1);
+  const PREV = addMonths(todayYear, todayMonth, -1);
+  const NEXT = addMonths(todayYear, todayMonth, 1);
 
   function isAllowed(y, m) {
-    const key = y * 100 + m;
-    return (
-      key >= PREV.year * 100 + PREV.month && key <= NEXT.year * 100 + NEXT.month
-    );
+    const key = monthIndex({ year: y, month: m });
+    return key >= monthIndex(PREV) && key <= monthIndex(NEXT);
   }
 
   const [confirmClear, setConfirmClear] = useState(false);
@@ -187,35 +82,8 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   const [conflict, setConflict] = useState(null);
   const loadSeq = useRef(0);
 
-  const [month, setMonth] = useState(() => {
-    const savedM = parseInt(localStorage.getItem("hmc_sched_month"), 10);
-    const savedY = parseInt(localStorage.getItem("hmc_sched_year"), 10);
-    if (
-      savedM >= 1 &&
-      savedM <= 12 &&
-      savedY >= 2000 &&
-      savedY <= 2100 &&
-      isAllowed(savedY, savedM)
-    ) {
-      return savedM;
-    }
-    return todayMonth;
-  });
-
-  const [year, setYear] = useState(() => {
-    const savedM = parseInt(localStorage.getItem("hmc_sched_month"), 10);
-    const savedY = parseInt(localStorage.getItem("hmc_sched_year"), 10);
-    if (
-      savedM >= 1 &&
-      savedM <= 12 &&
-      savedY >= 2000 &&
-      savedY <= 2100 &&
-      isAllowed(savedY, savedM)
-    ) {
-      return savedY;
-    }
-    return todayYear;
-  });
+  const [month, setMonth] = useState(() => savedMonth(isAllowed)?.month ?? todayMonth);
+  const [year, setYear] = useState(() => savedMonth(isAllowed)?.year ?? todayYear);
 
   const [half, setHalf] = useState(() => {
     const v = parseInt(localStorage.getItem("hmc_sched_half"), 10);
@@ -299,8 +167,8 @@ export default function SchedulerPage({ role, onDirtyChange }) {
     fetchLeaveRows(
       `${firstIso.slice(0, 4)}-01-01`,
       `${lastIso.slice(0, 4)}-12-31`,
-      visibleIdsKey.split(","),
       leaveCodesKey.split(","),
+      visibleIdsKey.split(","),
     ).then(({ data, error }) => {
       if (!active) return;
       if (error) setError(friendlyError(error, "check the leave days used this year"));
@@ -332,7 +200,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
     setLoading(true);
 
     const [empRes, schRes] = await Promise.all([
-      supabase.from("employees").select("*").order("name"),
+      fetchEmployees(),
       fetchSchedules(firstIso, lastIso),
     ]);
 
@@ -400,33 +268,9 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   function setStatus(employeeId, iso, status) {
     if (isAllDepts || !canEdit || !editing) return;
 
-    const key = `${employeeId}|${iso}`;
+    const key = cellKey(employeeId, iso);
     setPending((prev) => ({ ...prev, [key]: status ?? null }));
-
-    setSchedules((prev) => {
-      const existing = prev.find(
-        (s) => s.employee_id === employeeId && s.date === iso,
-      );
-
-      if (!status) {
-        return prev.filter((s) => s.id !== existing?.id);
-      }
-
-      if (existing) {
-        return prev.map((s) => (s.id === existing.id ? { ...s, status } : s));
-      }
-
-      return [
-        ...prev,
-        {
-          id: `pending-${key}`,
-          employee_id: employeeId,
-          date: iso,
-          status,
-          _pending: true,
-        },
-      ];
-    });
+    setSchedules((prev) => applyStatus(prev, employeeId, iso, status));
   }
 
   function askClearHalf() {
@@ -494,34 +338,17 @@ export default function SchedulerPage({ role, onDirtyChange }) {
       return;
     }
 
-    const source = {};
-    for (const r of data) if (r.status) source[`${r.employee_id}|${r.date}`] = r.status;
-    const taken = new Set(
-      schedules.filter((s) => s.status).map((s) => `${s.employee_id}|${s.date}`),
-    );
-
-    const fills = [];
-    // Copied leave counts toward the yearly limit too; skip what won't fit.
-    const counts = { ...leaveCounts };
-    let leaveSkipped = 0;
-    for (const empId of empIds) {
-      for (const d of days) {
-        const key = `${empId}|${d.iso}`;
-        if (taken.has(key) || key in pending) continue;
-        const from = sameWeekdayIn(d.iso, prevDays);
-        const status = from && source[`${empId}|${from}`];
-        if (!status) continue;
-        if (isLeave(status)) {
-          if (leaveStatusFor(counts, empId, d.iso, false).blocked) {
-            leaveSkipped++;
-            continue;
-          }
-          const ck = `${empId}|${d.iso.slice(0, 4)}`;
-          counts[ck] = (counts[ck] || 0) + 1;
-        }
-        fills.push({ key, empId, iso: d.iso, status });
-      }
-    }
+    // Copied leave counts toward the yearly limit too; what won't fit is skipped.
+    const { fills, leaveSkipped } = planCopy({
+      employeeIds: empIds,
+      days,
+      prevDays,
+      sourceRows: data,
+      currentRows: schedules,
+      pending,
+      leaveCounts,
+      isLeave,
+    });
     const skippedNote = leaveSkipped
       ? ` · ${leaveSkipped} leave ${leaveSkipped === 1 ? "day" : "days"} skipped (yearly limit)`
       : "";
@@ -537,18 +364,12 @@ export default function SchedulerPage({ role, onDirtyChange }) {
 
     setPending((p) => {
       const next = { ...p };
-      for (const f of fills) next[f.key] = f.status;
+      for (const f of fills) next[cellKey(f.employeeId, f.iso)] = f.status;
       return next;
     });
     setSchedules((rows) => [
       ...rows,
-      ...fills.map((f) => ({
-        id: `pending-${f.key}`,
-        employee_id: f.empId,
-        date: f.iso,
-        status: f.status,
-        _pending: true,
-      })),
+      ...fills.map((f) => pendingRow(f.employeeId, f.iso, f.status)),
     ]);
     showToast(
       "Copied from the previous period",
@@ -581,11 +402,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
     }
 
     // Cells another user changed after this edit session started.
-    const before = rowsByKey(editSnapshot);
-    const now = rowsByKey(serverRows);
-    const conflicts = Object.keys(pending).filter(
-      (key) => (before[key]?.[0]?.status ?? null) !== (now[key]?.[0]?.status ?? null),
-    ).length;
+    const conflicts = countConflicts(pending, editSnapshot, serverRows);
 
     if (conflicts > 0) {
       setSaving(false);
@@ -599,17 +416,8 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   async function commitSave(serverRows) {
     setSaving(true);
 
-    const changes = Object.entries(pending).map(([key, status]) => {
-      const [employee_id, date] = key.split("|");
-      return { employee_id, date, status };
-    });
-
-    // Atomic path: `save_schedule_changes` from supabase/proposed_integrity.sql.
-    // PGRST202 means it isn't installed yet, so fall back to batched writes.
-    let { error } = await supabase.rpc("save_schedule_changes", { changes });
-    if (error?.code === "PGRST202") {
-      error = await saveInBatches(changes, serverRows);
-    }
+    const changes = pendingToChanges(pending);
+    const error = await saveScheduleChanges(changes, serverRows);
 
     if (error) {
       setSaving(false);
@@ -633,30 +441,14 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   }
 
   function changeMonth(delta) {
-    let m = month + delta;
-    let y = year;
-    if (m < 1) {
-      m = 12;
-      y -= 1;
-    }
-    if (m > 12) {
-      m = 1;
-      y += 1;
-    }
-    if (!isAllowed(y, m)) return;
-    setMonth(m);
-    setYear(y);
+    const next = addMonths(year, month, delta);
+    if (!isAllowed(next.year, next.month)) return;
+    setMonth(next.month);
+    setYear(next.year);
   }
 
-  function canGoPrev() {
-    const current = year * 100 + month;
-    return current > PREV.year * 100 + PREV.month;
-  }
-
-  function canGoNext() {
-    const current = year * 100 + month;
-    return current < NEXT.year * 100 + NEXT.month;
-  }
+  const canGoPrev = () => monthIndex({ year, month }) > monthIndex(PREV);
+  const canGoNext = () => monthIndex({ year, month }) < monthIndex(NEXT);
 
   // The print builder loads on first use; most visits never print.
   async function handlePrint() {
@@ -1065,170 +857,6 @@ export default function SchedulerPage({ role, onDirtyChange }) {
         }}
         onCancel={() => setConflict(null)}
       />
-    </div>
-  );
-}
-
-/* ------------------ Loading skeleton ------------------ */
-function GridSkeleton() {
-  return (
-    <div
-      className="-mx-4 sm:mx-0 bg-white border-y border-slate-900/[0.07] sm:border-0 sm:rounded-2xl sm:ring-1 sm:ring-slate-900/[0.06] shadow-card overflow-hidden"
-      aria-busy="true"
-    >
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
-        <span className={`${SPINNER} w-4 h-4`} />
-        <p className="text-sm text-slate-500">Loading schedule…</p>
-      </div>
-      <div className="p-3 sm:p-4 space-y-2.5 animate-pulse" aria-hidden="true">
-        {Array.from({ length: 6 }, (_, r) => (
-          <div key={r} className="flex items-center gap-2">
-            <div className="w-24 sm:w-56 shrink-0 space-y-1.5">
-              <div className="h-3 rounded-full bg-slate-200/80 w-4/5" />
-              <div className="h-2.5 rounded-full bg-slate-100 w-1/2" />
-            </div>
-            {Array.from({ length: 10 }, (_, c) => (
-              <div
-                key={c}
-                className="h-10 sm:h-12 flex-1 min-w-10 rounded-lg bg-slate-100"
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ------------------ Department dropdown ------------------ */
-function DepartmentDropdown({ value, onChange }) {
-  const settings = useSettings();
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef(null);
-  const btnRef = useRef(null);
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
-        setOpen(false);
-      }
-    }
-    window.addEventListener("mousedown", onDown);
-    menuRef.current?.querySelector('[aria-selected="true"]')?.focus();
-    return () => {
-      window.removeEventListener("mousedown", onDown);
-    };
-  }, [open]);
-
-  function close(refocus) {
-    setOpen(false);
-    if (refocus) btnRef.current?.focus();
-  }
-
-  const isAll = value === "all";
-  const label = isAll ? "All departments" : value;
-
-  const options = [
-    { value: "all", label: "All departments", preview: true },
-    ...departmentNames(settings, { activeOnly: true, keep: value })
-      .sort((a, b) => a.localeCompare(b))
-      .map((d) => ({ value: d, label: d, preview: false })),
-  ];
-
-  return (
-    <div ref={wrapRef} className="relative min-w-0 w-full lg:w-auto">
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown" && !open) {
-            e.preventDefault();
-            setOpen(true);
-          }
-        }}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={`Department: ${label}`}
-        className={`inline-flex items-center gap-2 rounded-xl px-3 sm:px-3.5 h-10 sm:h-11 lg:h-10 text-sm font-semibold transition w-full lg:min-w-[9rem] lg:w-auto justify-between bg-white shadow-card ${
-          open
-            ? "ring-2 ring-green-600"
-            : "ring-1 ring-inset ring-slate-200 hover:ring-slate-300 hover:bg-slate-50"
-        }`}
-      >
-        <span className="flex items-center gap-2 min-w-0">
-          <Icon
-            name="building"
-            size={16}
-            className={`shrink-0 ${isAll ? "text-green-600" : "text-slate-400"}`}
-          />
-          <span
-            className={`truncate ${isAll ? "text-green-700" : "text-slate-800"}`}
-          >
-            {label}
-          </span>
-        </span>
-
-        <Icon
-          name="chevronDown"
-          size={16}
-          className={`text-slate-400 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-
-      {open && (
-        <div
-          ref={menuRef}
-          role="listbox"
-          aria-label="Select department"
-          onKeyDown={(e) => handleMenuKeyDown(e, menuRef.current, close)}
-          className={`absolute z-40 top-full left-0 mt-2 w-72 max-w-[calc(100vw-2rem)] max-h-[60vh] overflow-y-auto overscroll-contain scroll-thin ${MENU}`}
-        >
-          <div className={MENU_HEADING} aria-hidden="true">
-            Select department
-          </div>
-
-          {options.map((opt) => {
-            const active = value === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                role="option"
-                aria-selected={active}
-                onClick={() => {
-                  close(true);
-                  onChange(opt.value);
-                }}
-                className={`${MENU_ITEM} ${
-                  active
-                    ? "bg-green-50 text-green-800 focus:bg-green-100"
-                    : "text-slate-700 hover:bg-slate-100 focus:bg-slate-100"
-                }`}
-              >
-                <span className="flex-1 truncate font-medium">{opt.label}</span>
-
-                {opt.preview && (
-                  <span className="text-[0.625rem] uppercase tracking-wider font-bold text-green-700 bg-white ring-1 ring-inset ring-green-600/20 rounded-full px-1.5 py-0.5 shrink-0">
-                    Preview
-                  </span>
-                )}
-
-                {active && (
-                  <Icon
-                    name="check"
-                    size={16}
-                    strokeWidth={3}
-                    className="text-green-600 shrink-0"
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

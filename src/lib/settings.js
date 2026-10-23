@@ -168,3 +168,35 @@ export function leaveTypes(settings) {
 export function leaveChecker(settings) {
   return (code) => !!findShift(settings, code)?.isLeave;
 }
+
+/* ---------- Writes (Settings page, super_admin only via RLS) ----------
+   Each returns Supabase's { data, error }; `data` is the changed rows, so an
+   empty array means RLS let nothing through. */
+
+export function savePrintSettings(payload) {
+  return supabase.from("print_settings").upsert(payload).select();
+}
+
+export function insertShiftType(row) {
+  return supabase.from("shift_types").insert(row).select();
+}
+
+export function updateShiftType(code, fields) {
+  return supabase.from("shift_types").update(fields).eq("code", code).select();
+}
+
+export function deleteShiftType(code) {
+  return supabase.from("shift_types").delete().eq("code", code).select();
+}
+
+export function insertDepartment(payload) {
+  return supabase.from("departments").insert(payload).select();
+}
+
+export function updateDepartment(name, payload) {
+  return supabase.from("departments").update(payload).eq("name", name).select();
+}
+
+export function deleteDepartment(name) {
+  return supabase.from("departments").delete().eq("name", name).select();
+}

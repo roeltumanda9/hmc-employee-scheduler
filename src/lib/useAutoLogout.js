@@ -18,11 +18,8 @@ export function useAutoLogout(enabled) {
   const warningRef = useRef(false);
 
   useEffect(() => {
-    if (!enabled) {
-      setWarning(false);
-      warningRef.current = false;
-      return;
-    }
+    // Signing out (enabled → false) clears the warning in the cleanup below.
+    if (!enabled) return;
 
     let disposed = false;
     let logoutStarted = false;
@@ -82,10 +79,9 @@ export function useAutoLogout(enabled) {
         void signOutForInactivity();
       } else if (elapsed >= IDLE_TIMEOUT - WARN_BEFORE) {
         showWarning();
-      } else {
-        warningRef.current = false;
-        setWarning(false);
       }
+      // Otherwise the warning is already off: it starts off, and the cleanup
+      // below turns it off whenever this effect stops.
     }
 
     const events = [
@@ -142,6 +138,9 @@ export function useAutoLogout(enabled) {
 
       document.removeEventListener("visibilitychange", onVisible);
       clearInterval(interval);
+
+      warningRef.current = false;
+      setWarning(false);
     };
   }, [enabled]);
 

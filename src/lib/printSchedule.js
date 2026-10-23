@@ -467,26 +467,29 @@ export function printSchedule({
   td.cell.we { background: var(--weekend); }
 ${shiftCss}
 
-  /* Totals: secondary but readable. */
+  /* Totals: same colors as the scheduler grid (ScheduleGrid SUMMARY):
+     tinted headers and footer, colored numbers on white. */
   th.sum-h {
     font-size: 5.5pt;
     font-weight: 700;
     letter-spacing: 0.05em;
     line-height: 1.1;
     text-transform: uppercase;
-    color: var(--muted);
     padding: 0.8mm 0.5mm;
-    background: #f9fafb;
   }
+  th.sum-h.leave   { background: #ecfdf5; color: #065f46; }
+  th.sum-h.present { background: #f0fdf4; color: #166534; }
+  th.sum-h.off     { background: #fff1f2; color: #be123c; }
+  th.sum-h.total   { background: #f1f5f9; color: #334155; }
   td.sum {
     font-size: 7.5pt;
-    font-weight: 600;
-    color: var(--muted);
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
-  td.sum.leave { color: #047857; }
-  td.sum.off { color: #be123c; }
-  td.sum.total { color: var(--ink); font-weight: 800; background: #f9fafb; }
+  td.sum.leave   { color: #065f46; }
+  td.sum.present { color: #15803d; }
+  td.sum.off     { color: #e11d48; }
+  td.sum.total   { color: #0f172a; font-weight: 800; background: #f8fafc; }
 
   /* Daily manpower: the summary row. */
   tr.manpower td {
@@ -506,7 +509,10 @@ ${shiftCss}
   }
   tr.manpower td.count { font-size: 8pt; color: var(--brand); }
   tr.manpower td.sum { font-size: 8pt; }
-  tr.manpower td.sum.total { background: #dcfce7; }
+  tr.manpower td.sum.leave   { background: #ecfdf5; color: #065f46; }
+  tr.manpower td.sum.present { background: #f0fdf4; color: #166534; }
+  tr.manpower td.sum.off     { background: #fff1f2; color: #be123c; }
+  tr.manpower td.sum.total   { background: #f1f5f9; color: #1e293b; }
 
   /* ---------- Sign-off ---------- */
   .signoff {
@@ -578,10 +584,10 @@ ${shiftCss}
         <th class="corner" rowspan="2">#</th>
         <th class="corner name-h" rowspan="2">Employee</th>
         ${monthHeaders}
-        <th class="sum-h first" rowspan="2">Leave</th>
-        <th class="sum-h" rowspan="2">Physical<br>Present</th>
-        <th class="sum-h" rowspan="2">Physical<br>Off</th>
-        <th class="sum-h" rowspan="2">Total<br>Working<br>Days</th>
+        <th class="sum-h first leave" rowspan="2">Leave</th>
+        <th class="sum-h present" rowspan="2">Physical<br>Present</th>
+        <th class="sum-h off" rowspan="2">Physical<br>Off</th>
+        <th class="sum-h total" rowspan="2">Total<br>Working<br>Days</th>
       </tr>
       <tr>${dayHeaders}</tr>
     </thead>

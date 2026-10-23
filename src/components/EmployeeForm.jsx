@@ -1,5 +1,9 @@
 import { useEffect, useId, useState } from "react";
-import { supabase } from "../lib/supabase";
+import {
+  getNextEmployeeNumber,
+  insertEmployee,
+  updateEmployee,
+} from "../lib/employeeData";
 import { departmentNames, useSettings } from "../lib/settings";
 import { buildFullName, formatName, formatRole } from "../lib/format";
 import { friendlyError } from "../lib/errors";
@@ -16,25 +20,27 @@ const empty = {
   role: "",
 };
 
-// Find the next employee number by looking at existing numbers
-async function getNextEmployeeNumber() {
-  const { data, error } = await supabase.from("employees").select("number");
-
-  if (error || !data) return "1001";
-
-  const nums = data.map((r) => parseInt(r.number, 10)).filter((n) => !isNaN(n));
-
-  if (nums.length === 0) return "1001";
-  const max = Math.max(...nums);
-  return String(max + 1);
+function formFrom(employee) {
+  if (!employee) return empty;
+  return {
+    first_name: employee.first_name || "",
+    middle_name: employee.middle_name || "",
+    last_name: employee.last_name || "",
+    number: String(employee.number ?? ""),
+    department: employee.department || "",
+    role: employee.role || "",
+  };
 }
 
-export default function EmployeeForm({ open, editing, onDone, onCancel }) {
-  const [form, setForm] = useState(empty);
+// Rendered only while open (EmployeesPage), keyed by the employee, so the
+// form state starts from `editing` on every opening.
+export default function EmployeeForm({ editing, onDone, onCancel }) {
+  const [form, setForm] = useState(() => formFrom(editing));
   const [saving, setSaving] = useState(false);
-  const [loadingNumber, setLoadingNumber] = useState(false);
+  // Adding: the next employee number is fetched on open.
+  const [loadingNumber, setLoadingNumber] = useState(!editing);
   const [error, setError] = useState("");
-  const dialogRef = useDialog(open, onCancel);
+  const dialogRef = useDialog(true, onCancel);
   const settings = useSettings();
   // Inactive departments are hidden, except the one this employee is already in.
   const departmentOptions = departmentNames(settings, {
@@ -43,40 +49,21 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
   });
   const titleId = useId();
 
-  // Load form values when the modal opens
+  // Adding new — fetch the next auto-assigned number
   useEffect(() => {
-    if (!open) return;
-    setError("");
-
-    if (editing) {
-      setForm({
-        first_name: editing.first_name || "",
-        middle_name: editing.middle_name || "",
-        last_name: editing.last_name || "",
-        number: String(editing.number ?? ""),
-        department: editing.department || "",
-        role: editing.role || "",
-      });
-      return;
-    }
-
-    // Adding new — fetch the next auto-assigned number
-    setForm(empty);
-    setLoadingNumber(true);
+    if (editing) return;
     let cancelled = false;
 
-    (async () => {
-      const next = await getNextEmployeeNumber();
-      if (!cancelled) {
-        setForm((f) => ({ ...f, number: next }));
-        setLoadingNumber(false);
-      }
-    })();
+    getNextEmployeeNumber().then((next) => {
+      if (cancelled) return;
+      setForm((f) => ({ ...f, number: next }));
+      setLoadingNumber(false);
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [open, editing]);
+  }, [editing]);
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -99,18 +86,15 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
 
     let error;
     if (editing) {
-      ({ error } = await supabase
-        .from("employees")
-        .update(payload)
-        .eq("id", editing.id));
+      ({ error } = await updateEmployee(editing.id, payload));
     } else {
-      ({ error } = await supabase.from("employees").insert(payload));
+      ({ error } = await insertEmployee(payload));
 
       // Another admin took this number first. Once employees.number is unique
       // in the database this surfaces as 23505, so fetch a fresh number and retry.
       for (let attempt = 0; attempt < 3 && isNumberTaken(error); attempt++) {
         payload.number = await getNextEmployeeNumber();
-        ({ error } = await supabase.from("employees").insert(payload));
+        ({ error } = await insertEmployee(payload));
       }
     }
 
@@ -126,7 +110,6 @@ export default function EmployeeForm({ open, editing, onDone, onCancel }) {
     onDone();
   }
 
-  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">

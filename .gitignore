@@ -31,3 +31,7 @@ dist-ssr
 CLAUDE.md
 AUDIT.md
 .claude/
+
+# Playwright output
+test-results/
+playwright-report/

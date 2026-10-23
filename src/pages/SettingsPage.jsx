@@ -1,11 +1,20 @@
 import { useId, useState } from "react";
-import { supabase } from "../lib/supabase";
 import {
   PROTECTED_SHIFTS,
   SHIFT_CODE_PATTERN,
   SHIFT_COLORS,
 } from "../lib/statuses";
-import { findShift, useSettings } from "../lib/settings";
+import {
+  deleteDepartment,
+  deleteShiftType,
+  findShift,
+  insertDepartment,
+  insertShiftType,
+  savePrintSettings,
+  updateDepartment,
+  updateShiftType,
+  useSettings,
+} from "../lib/settings";
 import { canManageEmployees } from "../lib/auth";
 import { friendlyError } from "../lib/errors";
 import { formatName } from "../lib/format";
@@ -242,10 +251,7 @@ function PrintSettingsCard({ print, onSaved }) {
   async function save() {
     setSaving(true);
     setError("");
-    const { data, error } = await supabase
-      .from("print_settings")
-      .upsert(printPayload(form))
-      .select();
+    const { data, error } = await savePrintSettings(printPayload(form));
     setSaving(false);
     if (error) return setError(friendlyError(error, "save the print signatures"));
     if (!data?.length) {
@@ -386,11 +392,7 @@ function ShiftTypeRow({ shift, editable, onSaved }) {
     setConfirmDelete(false);
     setDeleting(true);
     setError("");
-    const { data, error } = await supabase
-      .from("shift_types")
-      .delete()
-      .eq("code", shift.code)
-      .select();
+    const { data, error } = await deleteShiftType(shift.code);
     setDeleting(false);
 
     if (error?.code === "23503") {
@@ -540,15 +542,8 @@ function ShiftTypeForm({ shift, isNew = false, onCancel, onSaved }) {
     const nextOrder =
       Math.max(0, ...settings.shifts.map((s) => s.sortOrder || 0)) + 1;
     const { data, error } = isNew
-      ? await supabase
-          .from("shift_types")
-          .insert({ code, label, default_time: time || null, color: form.color, sort_order: nextOrder, ...leaveField })
-          .select()
-      : await supabase
-          .from("shift_types")
-          .update({ label, default_time: time || null, color: form.color, ...leaveField })
-          .eq("code", shift.code)
-          .select();
+      ? await insertShiftType({ code, label, default_time: time || null, color: form.color, sort_order: nextOrder, ...leaveField })
+      : await updateShiftType(shift.code, { label, default_time: time || null, color: form.color, ...leaveField });
     setSaving(false);
 
     if (error?.code === "23505") return setError(`A shift with the code ${code} already exists.`);
@@ -759,12 +754,8 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
     setSaving(true);
     setError("");
     const { data, error } = isNew
-      ? await supabase.from("departments").insert(payload).select()
-      : await supabase
-          .from("departments")
-          .update(payload)
-          .eq("name", department.name)
-          .select();
+      ? await insertDepartment(payload)
+      : await updateDepartment(department.name, payload);
     setSaving(false);
 
     if (error) {
@@ -782,11 +773,7 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
     setConfirmDelete(false);
     setSaving(true);
     setError("");
-    const { data, error } = await supabase
-      .from("departments")
-      .delete()
-      .eq("name", department.name)
-      .select();
+    const { data, error } = await deleteDepartment(department.name);
     setSaving(false);
 
     if (error?.code === "23503") {
