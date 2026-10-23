@@ -191,7 +191,7 @@ export function printSchedule({
     .map(
       (s) => `
       <div class="sig">
-        <div class="sig-role">${s.role}</div>
+        <div class="sig-role">${s.role}:</div>
         <div class="sig-line"></div>
         <div class="sig-name">${s.name ? escapeHtml(s.name) : "&nbsp;"}</div>
         <div class="sig-title">${
@@ -402,7 +402,6 @@ export function printSchedule({
   }
 
   thead th { background: #fff; font-weight: 700; }
-  thead tr:last-child th { border-bottom: 1.25pt solid var(--frame); }
   th.corner {
     font-size: 6.5pt;
     letter-spacing: 0.1em;
@@ -479,7 +478,6 @@ ${shiftCss}
     padding: 0.8mm 0.5mm;
     background: #f9fafb;
   }
-  th.sum-h.first, td.sum.first, tfoot td.sum.first { border-left: 1.25pt solid var(--frame); }
   td.sum {
     font-size: 7.5pt;
     font-weight: 600;
@@ -520,11 +518,11 @@ ${shiftCss}
     page-break-inside: avoid;
   }
   .sig-role {
-    font-size: 6.5pt;
-    font-weight: 700;
-    letter-spacing: 0.12em;
+    font-size: 9pt;
+    font-weight: 800;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--faint);
+    color: var(--ink);
   }
   .sig-line { height: 11mm; border-bottom: 0.75pt solid var(--ink); }
   .sig-name {
