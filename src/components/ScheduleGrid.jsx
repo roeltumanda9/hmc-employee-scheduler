@@ -150,7 +150,7 @@ export default function ScheduleGrid({
   // A stronger rule after Sunday groups the period into weeks.
   // One even line between all days (slate-200 stays visible on the tinted
   // weekend columns).
-  const dayBorder = () => "border-r border-slate-200";
+  const dayBorder = () => "border-r border-slate-300";
 
   // The grid scrolls inside its own pane so the day header, name column and
   // manpower footer stay pinned. Heights leave room for the app header (and,
@@ -176,10 +176,12 @@ export default function ScheduleGrid({
   ];
 
   return (
-    <div className="-mx-4 sm:mx-0 bg-white border-y border-slate-900/[0.07] sm:border-0 sm:rounded-2xl sm:ring-1 sm:ring-slate-900/[0.06] shadow-card overflow-hidden">
+    <div className="-mx-4 sm:mx-0 bg-white border-y border-slate-900/[0.07] sm:border-0 sm:rounded-2xl sm:ring-1 sm:ring-slate-900/[0.14] shadow-card overflow-hidden">
       <div
         ref={paneRef}
-        className={`group/grid ${z.fit ? "overflow-y-auto overflow-x-hidden" : "overflow-auto overscroll-x-contain"} scroll-thin ${paneHeight} sm:max-h-[calc(100dvh-6rem)] lg:max-h-[calc(100dvh-9.5rem)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-green-600`}
+        // In fit mode the vertical scrollbar is hidden (wheel/touch/keys still
+        // scroll) so the columns reach the pane's edge with no white gutter.
+        className={`group/grid ${z.fit ? "overflow-y-auto overflow-x-hidden scroll-none" : "overflow-auto overscroll-x-contain scroll-thin"} ${paneHeight} sm:max-h-[calc(100dvh-6rem)] lg:max-h-[calc(100dvh-9.5rem)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-green-600`}
         role="region"
         aria-label="Schedule grid"
         tabIndex={0}
@@ -213,10 +215,13 @@ export default function ScheduleGrid({
               <th
                 scope="col"
                 rowSpan={2}
-                className={`sticky left-0 top-0 z-30 bg-white border-b border-r border-slate-200 px-3 ${z.fit ? "lg:px-4" : ""} py-2 text-left align-bottom ${NAME_SHADOW}`}
+                className={`sticky left-0 top-0 z-30 bg-white border-b border-slate-300 border-r border-r-slate-400 px-3 ${z.fit ? "lg:px-4" : ""} py-2 text-left align-bottom ${NAME_SHADOW}`}
               >
-                <span className="text-[13px] sm:text-[14px] text-slate-700 font-semibold">
+                <span className="block text-[15px] sm:text-[17px] text-slate-900 font-bold leading-tight">
                   Employee
+                </span>
+                <span className="block text-[12px] sm:text-[13px] text-slate-500 font-medium leading-tight tabular-nums">
+                  {employees.length} {employees.length === 1 ? "person" : "people"}
                 </span>
               </th>
 
@@ -226,8 +231,8 @@ export default function ScheduleGrid({
                   scope="colgroup"
                   colSpan={g.span}
                   style={{ height: MONTH_BAND_H }}
-                  className={`sticky top-0 z-20 bg-white border-b border-slate-100 ${
-                    i < monthGroups.length - 1 ? "border-r border-r-slate-200" : ""
+                  className={`sticky top-0 z-20 bg-white border-b border-slate-200 ${
+                    i < monthGroups.length - 1 ? "border-r border-r-slate-300" : ""
                   } px-2 py-0 text-left align-middle`}
                 >
                   <span className="block truncate text-[12px] sm:text-[13px] uppercase tracking-[0.06em] font-bold text-green-800">
@@ -243,8 +248,8 @@ export default function ScheduleGrid({
                   rowSpan={2}
                   aria-label={s.full.join(" ")}
                   title={s.full.join(" ")}
-                  className={`sticky top-0 z-20 ${s.head} border-b border-slate-200 ${
-                    i === 0 ? "border-l" : ""
+                  className={`sticky top-0 z-20 ${s.head} border-b border-slate-300 ${
+                    i === 0 ? "border-l border-l-slate-400" : ""
                   } ${i < 3 ? "border-r" : ""} px-1 py-2 text-center ${HEAD_SHADOW}`}
                 >
                   {shortLabels ? (
@@ -276,7 +281,7 @@ export default function ScheduleGrid({
                     scope="col"
                     aria-label={spokenDate(d)}
                     style={{ top: MONTH_BAND_H }}
-                    className={`sticky z-20 border-b border-slate-200 ${dayBorder(d)} px-0 py-1.5 text-center ${HEAD_SHADOW} ${
+                    className={`sticky z-20 border-b border-slate-300 ${dayBorder(d)} px-0 py-1.5 text-center ${HEAD_SHADOW} ${
                       isToday ? "bg-green-50" : weekend ? "bg-slate-50" : "bg-white"
                     }`}
                   >
@@ -329,7 +334,7 @@ export default function ScheduleGrid({
                   <th
                     scope="row"
                     title={emp.name}
-                    className={`sticky left-0 z-10 bg-white ${hoverBg} border-b border-r border-slate-100 px-3 ${z.fit ? "lg:px-4" : ""} py-1 text-left font-normal transition-colors ${NAME_SHADOW}`}
+                    className={`sticky left-0 z-10 bg-white ${hoverBg} border-b border-slate-300 border-r border-r-slate-400 px-3 ${z.fit ? "lg:px-4" : ""} py-1 text-left font-normal transition-colors ${NAME_SHADOW}`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       {/* Row number (display only — not the employee number) */}
@@ -366,7 +371,7 @@ export default function ScheduleGrid({
                     return (
                       <td
                         key={d.iso}
-                        className={`border-b border-slate-100 ${dayBorder(d)} ${z.cellPad} align-middle ${
+                        className={`border-b border-slate-300 ${dayBorder(d)} ${z.cellPad} align-middle ${
                           isToday ? "bg-green-50/70" : isWeekend(d) ? "bg-slate-50/70" : ""
                         }`}
                       >
@@ -398,8 +403,8 @@ export default function ScheduleGrid({
                   {SUMMARY.map((s, i) => (
                     <td
                       key={s.key}
-                      className={`${s.key === "total" ? "bg-slate-50" : `bg-white ${hoverBg}`} border-b border-slate-100 ${
-                        i === 0 ? "border-l border-l-slate-200" : ""
+                      className={`${s.key === "total" ? "bg-slate-50" : `bg-white ${hoverBg}`} border-b border-slate-300 ${
+                        i === 0 ? "border-l border-l-slate-400" : ""
                       } ${i < 3 ? "border-r" : ""} px-1 text-center transition-colors`}
                     >
                       <SummaryNumber
@@ -418,7 +423,7 @@ export default function ScheduleGrid({
             <tr>
               <th
                 scope="row"
-                className={`sticky left-0 bottom-0 z-30 bg-green-50 border-t border-green-200 border-r border-r-slate-200 px-3 ${z.fit ? "lg:px-4" : ""} py-2 text-left font-normal ${NAME_SHADOW}`}
+                className={`sticky left-0 bottom-0 z-30 bg-green-50 border-t border-green-200 border-r border-r-slate-400 px-3 ${z.fit ? "lg:px-4" : ""} py-2 text-left font-normal ${NAME_SHADOW}`}
               >
                 <div className="flex items-center gap-2.5">
                   <div
@@ -463,8 +468,8 @@ export default function ScheduleGrid({
                 <td
                   key={s.key}
                   className={`sticky bottom-0 z-20 ${s.foot} border-t border-green-200 ${
-                    i === 0 ? "border-l border-l-slate-200" : ""
-                  } ${i < 3 ? "border-r border-r-slate-200" : ""} py-2 text-center`}
+                    i === 0 ? "border-l border-l-slate-400" : ""
+                  } ${i < 3 ? "border-r border-r-slate-300" : ""} py-2 text-center`}
                 >
                   <span className={`font-bold tabular-nums ${z.summaryText}`}>
                     {{ leave: grandLeave, present: grandPresent, off: grandOff, total: grandTotal }[s.key]}
