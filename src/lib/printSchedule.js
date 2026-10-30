@@ -18,6 +18,23 @@ function escapeHtml(value) {
 
 const shortMonth = (m) => MONTHS[m - 1].slice(0, 3);
 
+/**
+ * Employees grouped by job title for the print sheet: [{ role, employees }],
+ * roles A–Z (case and spacing ignored), employees without one last under "".
+ * Each group keeps the order the employees came in.
+ */
+export function groupByRole(employees) {
+  const groups = new Map();
+  for (const emp of employees) {
+    const role = String(emp.role ?? "").trim().replace(/s+/g, " ").toUpperCase();
+    if (!groups.has(role)) groups.set(role, []);
+    groups.get(role).push(emp);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)))
+    .map(([role, list]) => ({ role, employees: list }));
+}
+
 // "Oct 27 – Nov 11, 2026" (years shown on both ends when they differ).
 function dateRange(days) {
   const first = days[0];
@@ -110,7 +127,7 @@ export function printSchedule({
     .map(
       (d) => `
         <th class="day${isWeekend(d) ? " we" : ""}">
-          <span class="weekday">${escapeHtml(d.weekday.slice(0, 2).toUpperCase())}</span>
+          <span class="weekday">${escapeHtml(d.weekday.slice(0, 3).toUpperCase())}</span>
           <span class="daynum">${d.day}</span>
         </th>`,
     )
@@ -120,8 +137,7 @@ export function printSchedule({
   let grandLeave = 0;
   const isLeave = leaveChecker(settings);
 
-  const rows = visibleEmployees
-    .map((emp) => {
+  const rowFor = (emp) => {
       const { present, off, leave } = tallyDays(
         days.map((d) => lookup[`${emp.id}|${d.iso}`]),
         isLeave,
@@ -147,7 +163,6 @@ export function printSchedule({
           <td class="num">${escapeHtml(emp.biometric_no || "")}</td>
           <td class="name">
             <div class="ename">${escapeHtml(emp.name)}</div>
-            ${emp.role ? `<div class="role">${escapeHtml(emp.role)}</div>` : ""}
           </td>
           ${cells}
           <td class="sum first leave">${leave || ""}</td>
@@ -155,7 +170,18 @@ export function printSchedule({
           <td class="sum off">${off || ""}</td>
           <td class="sum total">${total || ""}</td>
         </tr>`;
-    })
+  };
+
+  // Employees under a heading row per job title (the role isn't repeated per row).
+  const columnCount = 2 + days.length + 4;
+  const rows = groupByRole(visibleEmployees)
+    .map(
+      ({ role, employees }) => `
+        <tr class="role-group">
+          <td colspan="${columnCount}">${escapeHtml(role || "No role")}<span class="role-count">${employees.length}</span></td>
+        </tr>
+        ${employees.map(rowFor).join("")}`,
+    )
     .join("");
 
   const dailyTotals = days
@@ -255,8 +281,8 @@ export function printSchedule({
     --muted: #4b5563;
     --faint: #6b7280;
     --line: #c3c8cf;
-    --grid: #8b94a1;
-    --frame: #1f2937;
+    --grid: #000; /* grid lines: black, so they show on grey / newsprint paper */
+    --frame: #000;
     --brand: #166534;
     --brand-soft: #ecfdf3;
     --weekend: #f4f5f7;
@@ -398,10 +424,11 @@ export function printSchedule({
 
   thead th { background: #fff; font-weight: 700; }
   th.corner {
-    font-size: 6.5pt;
+    font-size: 7pt;
+    font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--ink);
     vertical-align: bottom;
     padding-bottom: 1mm;
   }
@@ -420,8 +447,8 @@ export function printSchedule({
     display: block;
     font-size: 5.5pt;
     font-weight: 700;
-    letter-spacing: 0.06em;
-    color: var(--faint);
+    letter-spacing: 0.02em;
+    color: var(--ink);
   }
   th.day .daynum {
     display: block;
@@ -433,8 +460,9 @@ export function printSchedule({
   th.day.we .weekday { color: #b91c1c; }
 
   td.num {
-    font-size: 6.5pt;
-    color: var(--muted);
+    font-size: 7.5pt;
+    font-weight: 700;
+    color: var(--ink);
     font-variant-numeric: tabular-nums;
   }
   td.name {
@@ -449,6 +477,25 @@ export function printSchedule({
   }
   .ename { font-size: 7.8pt; font-weight: 700; line-height: 1.15; }
   .role { font-size: 6pt; color: var(--faint); line-height: 1.15; }
+
+  /* Job title heading above its employees. */
+  tr.role-group td {
+    text-align: left;
+    padding: 0.7mm 1.6mm;
+    background: #f1f5f9;
+    font-size: 6.5pt;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brand);
+  }
+  tr.role-group { break-after: avoid; page-break-after: avoid; }
+  .role-count {
+    margin-left: 1.5mm;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: var(--ink);
+  }
 
   td.cell {
     height: 6mm;
@@ -490,7 +537,7 @@ ${shiftCss}
   /* Daily manpower: the summary row. */
   tr.manpower td {
     background: var(--brand-soft);
-    border-top: 1.25pt solid var(--brand);
+    border-top: 1.25pt solid var(--frame);
     font-weight: 800;
     font-variant-numeric: tabular-nums;
     padding: 1mm 0;
