@@ -46,3 +46,42 @@ export function sortByNumber(employees) {
     return na - nb;
   });
 }
+
+/**
+ * Saves an import from the biometric (see biometricImport.js planImport):
+ * `inserts` / `updates` are plan items. New employees go in one insert,
+ * renumbered and retried if someone took their numbers meanwhile; updates
+ * go one by one. Stops at the first error.
+ * Returns { added, updated, error }.
+ */
+export async function saveEmployeeImport(inserts, updates) {
+  let added = 0;
+  let updated = 0;
+
+  if (inserts.length) {
+    const rows = inserts.map((i) => ({ ...i.payload }));
+    let { error } = await insertEmployee(rows);
+    for (let attempt = 0; attempt < 3 && isNumberTaken(error); attempt++) {
+      let n = Number(await getNextEmployeeNumber());
+      for (const r of rows) r.number = String(n++);
+      ({ error } = await insertEmployee(rows));
+    }
+    if (error) return { added, updated, error };
+    added = rows.length;
+  }
+
+  for (const u of updates) {
+    const { error } = await updateEmployee(u.employee.id, u.payload);
+    if (error) return { added, updated, error };
+    updated++;
+  }
+  return { added, updated, error: null };
+}
+
+// Another admin took this employee number first (employees_number_key).
+export function isNumberTaken(error) {
+  return (
+    error?.code === "23505" &&
+    /number/i.test(`${error.message} ${error.details || ""}`)
+  );
+}

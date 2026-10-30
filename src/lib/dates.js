@@ -100,3 +100,44 @@ export function sameWeekdayIn(iso, prevDays) {
   }
   return null;
 }
+
+// How far the Scheduler can move from today's month: back for looking up and
+// reprinting old schedules, ahead for planning.
+export const MONTHS_BACK = 12;
+export const MONTHS_AHEAD = 2;
+
+// The first month the Scheduler shows: schedules start with its 1st period
+// (27 Oct – 11 Nov 2026). Nothing before it can be opened.
+export const FIRST_MONTH = { year: 2026, month: 11 };
+
+/**
+ * The payroll period a date falls in, as { year, month, half }:
+ * 27th–31st → 1st period of the next month, 12th–26th → 2nd period,
+ * 1st–11th → 1st period of the same month.
+ */
+export function periodContaining(date) {
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  if (d >= 27) return { ...addMonths(y, m, 1), half: 1 };
+  return { year: y, month: m, half: d >= 12 ? 2 : 1 };
+}
+
+/** Periods as one comparable number (each month has two). */
+export function periodIndex({ year, month, half }) {
+  return (year * 12 + (month - 1)) * 2 + (half - 1);
+}
+
+/**
+ * The oldest period that can still be edited on `today`: the previous one
+ * (late corrections); everything before it is locked, since its payroll is
+ * done. supabase/proposed_schedule_lock.sql enforces the same date.
+ */
+export function oldestEditablePeriod(today = new Date()) {
+  const cur = periodContaining(today);
+  return previousPeriod(cur.year, cur.month, cur.half);
+}
+
+export function isPeriodLocked(period, today = new Date()) {
+  return periodIndex(period) < periodIndex(oldestEditablePeriod(today));
+}

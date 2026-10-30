@@ -2,10 +2,12 @@ import { useEffect, useId, useState } from "react";
 import {
   getNextEmployeeNumber,
   insertEmployee,
+  isNumberTaken,
   updateEmployee,
 } from "../lib/employeeData";
 import { departmentNames, useSettings } from "../lib/settings";
 import { buildFullName, formatName, formatRole } from "../lib/format";
+import { normalizeBioNo } from "../lib/biometricImport";
 import { friendlyError } from "../lib/errors";
 import { useDialog } from "../lib/useDialog";
 import { BACKDROP, BTN, BTN_SIZE, DIALOG, INPUT, LABEL, SPINNER_ON_BRAND } from "../lib/ui";
@@ -16,6 +18,7 @@ const empty = {
   middle_name: "",
   last_name: "",
   number: "",
+  biometric_no: "",
   department: "",
   role: "",
 };
@@ -27,6 +30,7 @@ function formFrom(employee) {
     middle_name: employee.middle_name || "",
     last_name: employee.last_name || "",
     number: String(employee.number ?? ""),
+    biometric_no: String(employee.biometric_no ?? ""),
     department: employee.department || "",
     role: employee.role || "",
   };
@@ -80,6 +84,8 @@ export default function EmployeeForm({ editing, onDone, onCancel }) {
       last_name: form.last_name.trim(),
       name: buildFullName(form),
       number: String(form.number ?? "").trim(),
+      // Empty = none (null, so the unique index allows many).
+      biometric_no: normalizeBioNo(form.biometric_no) || null,
       department: form.department.trim(),
       role: form.role.trim(),
     };
@@ -101,7 +107,9 @@ export default function EmployeeForm({ editing, onDone, onCancel }) {
     setSaving(false);
     if (error) {
       setError(
-        friendlyError(error, editing ? "save this employee" : "add this employee"),
+        isBioNoTaken(error)
+          ? `Biometric No. ${payload.biometric_no} already belongs to another employee.`
+          : friendlyError(error, editing ? "save this employee" : "add this employee"),
       );
       return;
     }
@@ -208,8 +216,8 @@ export default function EmployeeForm({ editing, onDone, onCancel }) {
               </Field>
             </div>
 
-            {/* Department + Role */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Department + Role + Biometric No. */}
+            <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1.4fr_1fr] gap-4">
               <Field label="Department">
                 <select
                   required
@@ -237,6 +245,16 @@ export default function EmployeeForm({ editing, onDone, onCancel }) {
                   onChange={(e) => update("role", formatRole(e.target.value))}
                   placeholder="e.g. CASHIER"
                   className={`${INPUT} uppercase`}
+                />
+              </Field>
+
+              <Field label="Biometric No.">
+                <input
+                  value={form.biometric_no}
+                  onChange={(e) => update("biometric_no", e.target.value.replace(/D/g, ""))}
+                  inputMode="numeric"
+                  placeholder="e.g. 162"
+                  className={`${INPUT} tabular-nums`}
                 />
               </Field>
             </div>
@@ -282,12 +300,6 @@ export default function EmployeeForm({ editing, onDone, onCancel }) {
   );
 }
 
-function isNumberTaken(error) {
-  return (
-    error?.code === "23505" &&
-    /number/i.test(`${error.message} ${error.details || ""}`)
-  );
-}
 
 function Field({ label, children }) {
   return (
@@ -295,5 +307,12 @@ function Field({ label, children }) {
       <span className={LABEL}>{label}</span>
       {children}
     </label>
+  );
+}
+
+function isBioNoTaken(error) {
+  return (
+    error?.code === "23505" &&
+    /biometric/i.test(`${error.message} ${error.details || ""}`)
   );
 }

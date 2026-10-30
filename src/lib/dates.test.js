@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   addMonths,
   getPayrollPeriodDays,
+  isPeriodLocked,
+  oldestEditablePeriod,
+  periodContaining,
+  periodIndex,
   periodTitle,
   previousPeriod,
   sameWeekdayIn,
@@ -132,5 +136,41 @@ describe("addMonths", () => {
     expect(addMonths(2026, 12, 1)).toEqual({ year: 2027, month: 1 });
     expect(addMonths(2026, 1, -1)).toEqual({ year: 2025, month: 12 });
     expect(addMonths(2026, 5, 0)).toEqual({ year: 2026, month: 5 });
+  });
+});
+
+describe("periodContaining", () => {
+  it("puts the 27th onwards in the next month's 1st period", () => {
+    expect(periodContaining(new Date(2026, 9, 30))).toEqual({ year: 2026, month: 11, half: 1 });
+    expect(periodContaining(new Date(2026, 11, 27))).toEqual({ year: 2027, month: 1, half: 1 });
+  });
+
+  it("splits the rest at the 12th", () => {
+    expect(periodContaining(new Date(2026, 9, 11))).toEqual({ year: 2026, month: 10, half: 1 });
+    expect(periodContaining(new Date(2026, 9, 12))).toEqual({ year: 2026, month: 10, half: 2 });
+    expect(periodContaining(new Date(2026, 9, 26))).toEqual({ year: 2026, month: 10, half: 2 });
+  });
+
+  it("agrees with getPayrollPeriodDays for every day of a year", () => {
+    for (let d = new Date(2026, 0, 1); d.getFullYear() === 2026; d.setDate(d.getDate() + 1)) {
+      const p = periodContaining(d);
+      const iso = `2026-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      expect(isos(getPayrollPeriodDays(p.year, p.month, p.half))).toContain(iso);
+    }
+  });
+});
+
+describe("period lock", () => {
+  const today = new Date(2026, 9, 30); // in Nov 1st period (Oct 27 – Nov 11)
+
+  it("keeps the previous period editable and locks older ones", () => {
+    expect(oldestEditablePeriod(today)).toEqual({ year: 2026, month: 10, half: 2 });
+    expect(isPeriodLocked({ year: 2026, month: 10, half: 2 }, today)).toBe(false);
+    expect(isPeriodLocked({ year: 2026, month: 10, half: 1 }, today)).toBe(true);
+    expect(isPeriodLocked({ year: 2026, month: 12, half: 2 }, today)).toBe(false);
+  });
+
+  it("orders periods across years", () => {
+    expect(periodIndex({ year: 2027, month: 1, half: 1 })).toBe(periodIndex({ year: 2026, month: 12, half: 2 }) + 1);
   });
 });

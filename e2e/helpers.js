@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { MONTHS, getPayrollPeriodDays } from "../src/lib/dates.js";
+import { MONTHS, getPayrollPeriodDays, periodContaining } from "../src/lib/dates.js";
 import { TEST_DEPARTMENT } from "./db.js";
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -29,10 +29,14 @@ export async function signIn(page, account, { start = "employees" } = {}) {
   await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeAttached();
 }
 
-// The period the Scheduler opens on with nothing remembered: this month, 1st period.
+// The period the Scheduler opens on with nothing remembered: the one today falls in.
+export function defaultPeriod() {
+  return periodContaining(new Date());
+}
+
 export function defaultPeriodDays() {
-  const now = new Date();
-  return getPayrollPeriodDays(now.getFullYear(), now.getMonth() + 1, 1);
+  const p = defaultPeriod();
+  return getPayrollPeriodDays(p.year, p.month, p.half);
 }
 
 // "Mon, Oct 12", as in the grid's cell labels.

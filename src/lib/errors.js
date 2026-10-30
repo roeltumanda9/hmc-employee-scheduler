@@ -15,6 +15,10 @@ export function friendlyError(error, action = "complete this action") {
   if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
     return `Couldn't ${action} because the server couldn't be reached. Check your internet connection and try again.`;
   }
+  // Raised by supabase/proposed_schedule_lock.sql (also code 42501).
+  if (/period is locked/i.test(msg)) {
+    return `Couldn't ${action}: that payroll period is closed, so its schedule can no longer be changed.`;
+  }
   if (code === "42501" || /row-level security|permission denied/i.test(msg)) {
     return `You don't have permission to ${action}. Ask an administrator if you think this is a mistake.`;
   }

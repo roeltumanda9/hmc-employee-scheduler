@@ -21,6 +21,7 @@ test("add an employee (next number), edit them, then delete them", async ({ page
   await form.getByLabel("Last name").fill(TEST_LAST_NAME);
   await form.getByLabel("Department").selectOption(TEST_DEPARTMENT);
   await form.getByLabel("Role").fill("tester");
+  await form.getByLabel("Biometric No.").fill("099901");
   const submit = form.getByRole("button", { name: "Add employee" });
   await expect(submit).toBeEnabled(); // waits for the next number to load
   await submit.click();
@@ -30,6 +31,10 @@ test("add an employee (next number), edit them, then delete them", async ({ page
   const { data: added } = await c.from("employees").select("*").eq("name", name).single();
   expect(added.number).toBe(expectedNumber);
   expect(added.role).toBe("TESTER");
+  if ("biometric_no" in added) {
+    expect(added.biometric_no).toBe("99901"); // leading zero dropped
+    await expect(page.getByRole("cell", { name: "99901", exact: true })).toBeVisible();
+  }
 
   // Edit
   await page.getByRole("button", { name: `Edit ${name}` }).click();

@@ -24,6 +24,11 @@ const SHORT_MONTHS = [
 
 // Edge shadows on the pinned column/header, shown once the grid has scrolled
 // (the scroll handler toggles data-sx / data-sy on the scroll container).
+// The biometric number column inside the sticky name cell: full height, with
+// its own right border, like the "No." column of the print sheet.
+const NO_COL =
+  "absolute inset-y-0 left-0 w-12 flex justify-center border-r border-slate-300";
+
 const NAME_SHADOW =
   "group-data-[sx]/grid:shadow-[8px_0_12px_-8px_rgb(15_23_42/0.18)]";
 const HEAD_SHADOW =
@@ -99,6 +104,10 @@ export default function ScheduleGrid({
   // Narrow totals columns get one-word headers (full text stays in aria-label).
   const shortLabels = z.summaryW < 76;
   const showRowNumber = !compact && z.empW >= 220;
+  // Name cells leave room on the left for the biometric number column.
+  const namePad = showRowNumber
+    ? `pl-[3.75rem] pr-3 ${z.fit ? "lg:pr-4" : ""}`
+    : `px-3 ${z.fit ? "lg:px-4" : ""}`;
 
   const lookup = {};
   for (const s of schedules) {
@@ -133,17 +142,14 @@ export default function ScheduleGrid({
     dailyManpower[d.iso] = count;
   }
 
-  const {
-    present: grandPresent,
-    off: grandOff,
-    leave: grandLeave,
-  } = tallyDays(
+  // Footer: only Leave gets a period total; Present / Off / Total stay per
+  // employee (a sum over everyone isn't a useful number).
+  const { leave: grandLeave } = tallyDays(
     employees.flatMap((emp) =>
       days.map((d) => lookup[`${emp.id}|${d.iso}`]?.status),
     ),
     isLeave,
   );
-  const grandTotal = grandPresent;
 
   // Day column styling shared by header, body and footer.
   const isWeekend = (d) => d.weekday === "Sat" || d.weekday === "Sun";
@@ -168,11 +174,12 @@ export default function ScheduleGrid({
     else monthGroups.push({ key: `${y}-${m}`, year: y, month: m, span: 1 });
   }
 
+  // Each totals column keeps one fill from heading to footer.
   const SUMMARY = [
-    { key: "leave", full: ["Leave"], short: "Leave", head: "bg-emerald-50 text-emerald-800", foot: "bg-emerald-50 text-emerald-800", body: "text-emerald-800" },
-    { key: "present", full: ["Physical", "Present"], short: "Present", head: "bg-green-50 text-green-800", foot: "bg-green-50 text-green-800", body: "text-green-700" },
-    { key: "off", full: ["Physical", "Off"], short: "Off", head: "bg-rose-50 text-rose-700", foot: "bg-rose-50 text-rose-700", body: "text-rose-600" },
-    { key: "total", full: ["Total", "Working Days"], short: "Total", head: "bg-slate-100 text-slate-700", foot: "bg-slate-100 text-slate-800", body: "text-slate-900" },
+    { key: "leave", full: ["Leave"], short: "Leave", head: "bg-emerald-50 text-emerald-800", foot: "bg-emerald-50 text-emerald-800", fill: "bg-emerald-50", body: "text-emerald-800" },
+    { key: "present", full: ["Physical", "Present"], short: "Present", head: "bg-green-50 text-green-800", foot: "bg-green-50 text-green-800", fill: "bg-green-50", body: "text-green-700" },
+    { key: "off", full: ["Physical", "Off"], short: "Off", head: "bg-rose-50 text-rose-700", foot: "bg-rose-50 text-rose-700", fill: "bg-rose-50", body: "text-rose-600" },
+    { key: "total", full: ["Total", "Working Days"], short: "Total", head: "bg-slate-100 text-slate-700", foot: "bg-slate-100 text-slate-800", fill: "bg-slate-100", body: "text-slate-900" },
   ];
 
   return (
@@ -215,8 +222,16 @@ export default function ScheduleGrid({
               <th
                 scope="col"
                 rowSpan={2}
-                className={`sticky left-0 top-0 z-30 bg-white border-b border-slate-300 border-r border-r-slate-400 px-3 ${z.fit ? "lg:px-4" : ""} py-2 text-left align-bottom ${NAME_SHADOW}`}
+                className={`sticky left-0 top-0 z-30 bg-white border-b border-slate-300 border-r border-r-slate-400 ${namePad} py-2 text-left align-bottom ${NAME_SHADOW}`}
               >
+                {showRowNumber && (
+                  <span
+                    className={`${NO_COL} items-end pb-2 text-[11px] sm:text-[12px] font-semibold uppercase tracking-wide text-slate-500`}
+                    title="Biometric number"
+                  >
+                    No.
+                  </span>
+                )}
                 <span className="block text-[15px] sm:text-[17px] text-slate-900 font-bold leading-tight">
                   Employee
                 </span>
@@ -249,8 +264,8 @@ export default function ScheduleGrid({
                   aria-label={s.full.join(" ")}
                   title={s.full.join(" ")}
                   className={`sticky top-0 z-20 ${s.head} border-b border-slate-300 ${
-                    i === 0 ? "border-l border-l-slate-400" : ""
-                  } ${i < 3 ? "border-r" : ""} px-1 py-2 text-center ${HEAD_SHADOW}`}
+                    i === 0 ? "border-l border-l-slate-300" : ""
+                  } ${i < 3 ? "border-r border-r-slate-300" : ""} px-1 py-2 text-center ${HEAD_SHADOW}`}
                 >
                   {shortLabels ? (
                     <span className="text-[11px] font-semibold leading-tight">
@@ -312,7 +327,7 @@ export default function ScheduleGrid({
           </thead>
 
           <tbody>
-            {employees.map((emp, idx) => {
+            {employees.map((emp) => {
               const { present, off, leave } = tallyDays(
                 days.map((d) => lookup[`${emp.id}|${d.iso}`]?.status),
                 isLeave,
@@ -334,20 +349,20 @@ export default function ScheduleGrid({
                   <th
                     scope="row"
                     title={emp.name}
-                    className={`sticky left-0 z-10 bg-white ${hoverBg} border-b border-slate-300 border-r border-r-slate-400 px-3 ${z.fit ? "lg:px-4" : ""} py-1 text-left font-normal transition-colors ${NAME_SHADOW}`}
+                    className={`sticky left-0 z-10 bg-white ${hoverBg} border-b border-slate-300 border-r border-r-slate-400 ${namePad} py-1 text-left font-normal transition-colors ${NAME_SHADOW}`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {/* Row number (display only — not the employee number) */}
-                      {showRowNumber && (
-                        <div
-                          className="w-5 shrink-0 text-right text-[12px] font-medium text-slate-400 tabular-nums"
-                          aria-hidden="true"
-                        >
-                          {idx + 1}
-                        </div>
-                      )}
-
-                      <div className="min-w-0">
+                    {/* Biometric number in its own bordered column, as on the
+                        print sheet (narrow layouts show it before the role). */}
+                    {showRowNumber && (
+                      <div
+                        className={`${NO_COL} items-center text-[12px] font-semibold tabular-nums text-slate-700`}
+                        title="Biometric number"
+                      >
+                        {emp.biometric_no || ""}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div>
                         <div
                           className={`font-semibold ${z.nameText} text-slate-900 leading-snug ${
                             "line-clamp-2 break-words text-balance"
@@ -358,6 +373,9 @@ export default function ScheduleGrid({
                         <div
                           className={`${z.metaText} text-slate-500 truncate leading-tight`}
                         >
+                          {!showRowNumber && emp.biometric_no && (
+                            <span className="tabular-nums">No. {emp.biometric_no} · </span>
+                          )}
                           {emp.role}
                         </div>
                       </div>
@@ -403,9 +421,9 @@ export default function ScheduleGrid({
                   {SUMMARY.map((s, i) => (
                     <td
                       key={s.key}
-                      className={`${s.key === "total" ? "bg-slate-50" : `bg-white ${hoverBg}`} border-b border-slate-300 ${
-                        i === 0 ? "border-l border-l-slate-400" : ""
-                      } ${i < 3 ? "border-r" : ""} px-1 text-center transition-colors`}
+                      className={`${s.fill} border-b border-slate-300 ${
+                        i === 0 ? "border-l border-l-slate-300" : ""
+                      } ${i < 3 ? "border-r border-r-slate-300" : ""} px-1 text-center transition-colors`}
                     >
                       <SummaryNumber
                         value={values[s.key]}
@@ -423,7 +441,7 @@ export default function ScheduleGrid({
             <tr>
               <th
                 scope="row"
-                className={`sticky left-0 bottom-0 z-30 bg-green-50 border-t border-green-200 border-r border-r-slate-400 px-3 ${z.fit ? "lg:px-4" : ""} py-2 text-left font-normal ${NAME_SHADOW}`}
+                className={`sticky left-0 bottom-0 z-30 bg-green-50 border-t border-t-slate-300 border-r border-r-slate-400 px-3 ${z.fit ? "lg:px-4" : ""} py-2 text-left font-normal ${NAME_SHADOW}`}
               >
                 <div className="flex items-center gap-2.5">
                   <div
@@ -437,7 +455,7 @@ export default function ScheduleGrid({
                       Total manpower
                     </div>
                     <div className="text-[10px] text-green-700/80 leading-tight">
-                      of the day
+                      per day
                     </div>
                   </div>
                 </div>
@@ -449,14 +467,12 @@ export default function ScheduleGrid({
                 return (
                   <td
                     key={d.iso}
-                    className={`sticky bottom-0 z-20 border-t border-green-200 ${dayBorder(d)} py-2 text-center ${
+                    className={`sticky bottom-0 z-20 border-t border-t-slate-300 ${dayBorder(d)} py-2 text-center ${
                       isToday ? "bg-green-100" : "bg-green-50"
                     }`}
                   >
                     <span
-                      className={`font-bold tabular-nums ${z.summaryText} ${
-                        count > 0 ? "text-green-800" : "text-green-300"
-                      }`}
+                      className={`font-bold tabular-nums ${z.summaryText} text-green-800`}
                     >
                       {count}
                     </span>
@@ -467,12 +483,12 @@ export default function ScheduleGrid({
               {SUMMARY.map((s, i) => (
                 <td
                   key={s.key}
-                  className={`sticky bottom-0 z-20 ${s.foot} border-t border-green-200 ${
-                    i === 0 ? "border-l border-l-slate-400" : ""
+                  className={`sticky bottom-0 z-20 ${s.foot} border-t border-t-slate-300 ${
+                    i === 0 ? "border-l border-l-slate-300" : ""
                   } ${i < 3 ? "border-r border-r-slate-300" : ""} py-2 text-center`}
                 >
                   <span className={`font-bold tabular-nums ${z.summaryText}`}>
-                    {{ leave: grandLeave, present: grandPresent, off: grandOff, total: grandTotal }[s.key]}
+                    {s.key === "leave" ? grandLeave : ""}
                   </span>
                 </td>
               ))}

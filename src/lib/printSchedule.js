@@ -116,14 +116,12 @@ export function printSchedule({
     )
     .join("");
 
-  let grandPresent = 0;
-  let grandOff = 0;
+  // Only Leave gets a total in the manpower row.
   let grandLeave = 0;
   const isLeave = leaveChecker(settings);
-  let grandTotalDays = 0;
 
   const rows = visibleEmployees
-    .map((emp, i) => {
+    .map((emp) => {
       const { present, off, leave } = tallyDays(
         days.map((d) => lookup[`${emp.id}|${d.iso}`]),
         isLeave,
@@ -142,14 +140,11 @@ export function printSchedule({
         .join("");
 
       const total = present;
-      grandPresent += present;
-      grandOff += off;
       grandLeave += leave;
-      grandTotalDays += total;
 
       return `
         <tr>
-          <td class="num">${i + 1}</td>
+          <td class="num">${escapeHtml(emp.biometric_no || "")}</td>
           <td class="name">
             <div class="ename">${escapeHtml(emp.name)}</div>
             ${emp.role ? `<div class="role">${escapeHtml(emp.role)}</div>` : ""}
@@ -439,7 +434,7 @@ export function printSchedule({
 
   td.num {
     font-size: 6.5pt;
-    color: var(--faint);
+    color: var(--muted);
     font-variant-numeric: tabular-nums;
   }
   td.name {
@@ -486,10 +481,11 @@ ${shiftCss}
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
-  td.sum.leave   { color: #065f46; }
-  td.sum.present { color: #15803d; }
-  td.sum.off     { color: #e11d48; }
-  td.sum.total   { color: #0f172a; font-weight: 800; background: #f8fafc; }
+  /* Each totals column keeps its heading's fill down to the footer. */
+  td.sum.leave   { color: #065f46; background: #ecfdf5; }
+  td.sum.present { color: #15803d; background: #f0fdf4; }
+  td.sum.off     { color: #e11d48; background: #fff1f2; }
+  td.sum.total   { color: #0f172a; font-weight: 800; background: #f1f5f9; }
 
   /* Daily manpower: the summary row. */
   tr.manpower td {
@@ -510,9 +506,9 @@ ${shiftCss}
   tr.manpower td.count { font-size: 8pt; color: var(--brand); }
   tr.manpower td.sum { font-size: 8pt; }
   tr.manpower td.sum.leave   { background: #ecfdf5; color: #065f46; }
-  tr.manpower td.sum.present { background: #f0fdf4; color: #166534; }
-  tr.manpower td.sum.off     { background: #fff1f2; color: #be123c; }
-  tr.manpower td.sum.total   { background: #f1f5f9; color: #1e293b; }
+  tr.manpower td.sum.present { background: #f0fdf4; }
+  tr.manpower td.sum.off     { background: #fff1f2; }
+  tr.manpower td.sum.total   { background: #f1f5f9; }
 
   /* ---------- Sign-off ---------- */
   .signoff {
@@ -581,7 +577,7 @@ ${shiftCss}
     </colgroup>
     <thead>
       <tr>
-        <th class="corner" rowspan="2">#</th>
+        <th class="corner" rowspan="2" title="Biometric number">No.</th>
         <th class="corner name-h" rowspan="2">Employee</th>
         ${monthHeaders}
         <th class="sum-h first leave" rowspan="2">Leave</th>
@@ -596,12 +592,12 @@ ${shiftCss}
     </tbody>
     <tfoot>
       <tr class="manpower">
-        <td class="label" colspan="2">Daily manpower</td>
+        <td class="label" colspan="2">Total manpower per day</td>
         ${dailyTotals}
         <td class="sum first leave">${grandLeave}</td>
-        <td class="sum present">${grandPresent}</td>
-        <td class="sum off">${grandOff}</td>
-        <td class="sum total">${grandTotalDays}</td>
+        <td class="sum present"></td>
+        <td class="sum off"></td>
+        <td class="sum total"></td>
       </tr>
     </tfoot>
   </table>

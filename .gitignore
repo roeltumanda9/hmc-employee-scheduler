@@ -35,3 +35,7 @@ AUDIT.md
 # Playwright output
 test-results/
 playwright-report/
+
+# Biometric (ATT2000) exports: staff names and attendance, never commit
+*.xls
+*.xlsx

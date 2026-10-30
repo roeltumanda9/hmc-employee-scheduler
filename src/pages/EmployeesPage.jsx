@@ -3,6 +3,8 @@ import { deleteEmployee, fetchEmployees, sortByNumber } from "../lib/employeeDat
 import { fetchLeaveRows } from "../lib/scheduleData";
 import { departmentNames, leaveTypes, useSettings } from "../lib/settings";
 import EmployeeForm from "../components/EmployeeForm";
+import BiometricImportModal from "../components/BiometricImportModal";
+import BiometricDropZone from "../components/BiometricDropZone";
 import ConfirmModal from "../components/ConfirmModal";
 import ErrorBanner from "../components/ErrorBanner";
 import { canManageEmployees } from "../lib/auth";
@@ -60,6 +62,7 @@ export default function EmployeesPage({ role }) {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [confirmId, setConfirmId] = useState(null);
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("all");
@@ -156,7 +159,7 @@ export default function EmployeesPage({ role }) {
         e.middle_name,
         e.last_name,
         e.name,
-        e.number,
+        e.biometric_no,
         e.role,
       ]
         .filter(Boolean)
@@ -214,6 +217,24 @@ export default function EmployeesPage({ role }) {
             loadEmployees();
           }}
           onCancel={closeForm}
+        />
+      )}
+
+      {canManage && importOpen && (
+        <BiometricImportModal
+          employees={employees}
+          onChanged={loadEmployees}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
+
+      {/* Biometric import: drop a new export to update names and departments. */}
+      {canManage && (
+        <BiometricDropZone
+          employees={employees}
+          disabled={loading}
+          onChanged={loadEmployees}
+          onReview={() => setImportOpen(true)}
         />
       )}
 
@@ -278,7 +299,7 @@ export default function EmployeesPage({ role }) {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 text-left text-[0.8125rem] text-slate-700 [&>th]:px-6 [&>th]:py-3.5 [&>th]:font-semibold [&>th]:border-b [&>th]:border-slate-200 [&>th]:whitespace-nowrap">
-                <th className="w-32">Emp. No.</th>
+                <th className="w-28" title="Biometric number">No.</th>
                 <th>Employee</th>
                 <th>Department</th>
                 <th>Role</th>
@@ -330,7 +351,7 @@ export default function EmployeesPage({ role }) {
                     <tr className="group hover:bg-slate-50/80 transition-colors">
                       <td className="px-6 py-3">
                         <span className="inline-flex font-mono text-xs tabular-nums text-slate-600 bg-slate-100 rounded-md px-1.5 py-0.5">
-                          {e.number || "—"}
+                          {e.biometric_no || "—"}
                         </span>
                       </td>
                       <td className="px-6 py-3">
@@ -404,7 +425,7 @@ export default function EmployeesPage({ role }) {
                         {e.department || "No department"}
                       </span>
                       <span className="text-[0.6875rem] text-slate-400 font-mono tabular-nums">
-                        {e.number ? `Emp. No. ${e.number}` : "No employee number"}
+                        {e.biometric_no ? `No. ${e.biometric_no}` : "No number"}
                       </span>
                     </div>
                     {leaveKinds.length > 0 && (

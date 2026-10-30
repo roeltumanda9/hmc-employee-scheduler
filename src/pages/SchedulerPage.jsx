@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MONTHS,
+  FIRST_MONTH,
+  MONTHS_AHEAD,
+  MONTHS_BACK,
   addMonths,
   getPayrollPeriodDays,
+  isPeriodLocked,
+  oldestEditablePeriod,
+  periodContaining,
   periodTitle,
   previousPeriod,
 } from "../lib/dates";
@@ -56,12 +62,17 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   const canEdit = canEditSchedules(role);
   const settings = useSettings();
 
-  // Navigation is limited to the previous, current and next month.
+  // Navigation: MONTHS_BACK months back (view / print old schedules), but not
+  // before FIRST_MONTH, to MONTHS_AHEAD ahead. Periods before the previous
+  // one are read-only.
   const today = new Date();
   const todayYear = today.getFullYear();
   const todayMonth = today.getMonth() + 1;
-  const PREV = addMonths(todayYear, todayMonth, -1);
-  const NEXT = addMonths(todayYear, todayMonth, 1);
+  const back = addMonths(todayYear, todayMonth, -MONTHS_BACK);
+  const PREV = monthIndex(back) < monthIndex(FIRST_MONTH) ? FIRST_MONTH : back;
+  const NEXT = addMonths(todayYear, todayMonth, MONTHS_AHEAD);
+  // The period today falls in: the default, and where "Today" goes.
+  const current = periodContaining(today);
 
   function isAllowed(y, m) {
     const key = monthIndex({ year: y, month: m });
@@ -84,10 +95,11 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const loadSeq = useRef(0);
 
-  const [month, setMonth] = useState(() => savedMonth(isAllowed)?.month ?? todayMonth);
-  const [year, setYear] = useState(() => savedMonth(isAllowed)?.year ?? todayYear);
+  const [month, setMonth] = useState(() => savedMonth(isAllowed)?.month ?? current.month);
+  const [year, setYear] = useState(() => savedMonth(isAllowed)?.year ?? current.year);
 
   const [half, setHalf] = useState(() => {
+    if (!savedMonth(isAllowed)) return current.half;
     const v = parseInt(localStorage.getItem("hmc_sched_half"), 10);
     return v === 2 ? 2 : 1;
   });
@@ -458,6 +470,22 @@ export default function SchedulerPage({ role, onDirtyChange }) {
   const canGoPrev = () => monthIndex({ year, month }) > monthIndex(PREV);
   const canGoNext = () => monthIndex({ year, month }) < monthIndex(NEXT);
 
+  const onCurrentPeriod =
+    year === current.year && month === current.month && half === current.half;
+
+  function goToToday() {
+    setMonth(current.month);
+    setYear(current.year);
+    setHalf(current.half);
+  }
+
+  // Closed payroll period: view and print only.
+  const locked = isPeriodLocked({ year, month, half }, today);
+  const editableFrom = (() => {
+    const p = oldestEditablePeriod(today);
+    return getPayrollPeriodDays(p.year, p.month, p.half)[0];
+  })();
+
   // The print builder loads on first use; most visits never print.
   async function handlePrint() {
     let printSchedule;
@@ -498,7 +526,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
               aria-label="Previous month"
               className={`${BTN.secondary} ${BTN_SIZE.icon} sm:h-11 sm:w-11 lg:h-10 lg:w-10 shrink-0`}
               title={
-                canGoPrev() ? "Previous month" : "No earlier months available"
+                canGoPrev() ? "Previous month" : "Schedules start here"
               }
             >
               <Icon name="chevronLeft" size={18} strokeWidth={2.5} />
@@ -528,6 +556,16 @@ export default function SchedulerPage({ role, onDirtyChange }) {
             >
               <Icon name="chevronRight" size={18} strokeWidth={2.5} />
             </button>
+
+            {!onCurrentPeriod && (
+              <button
+                onClick={() => confirmDiscard(goToToday)}
+                className={`${BTN.tertiary} ${BTN_SIZE.md} sm:h-11 lg:h-10 px-3 shrink-0`}
+                title="Go to the payroll period of today"
+              >
+                Today
+              </button>
+            )}
           </div>
 
           <div className="hidden 2xl:block h-8 w-px bg-slate-200 mx-0.5" aria-hidden="true" />
@@ -608,12 +646,12 @@ export default function SchedulerPage({ role, onDirtyChange }) {
                     setPending({});
                     setEditing(true);
                   }}
-                  disabled={loading || visibleEmployees.length === 0}
+                  disabled={loading || locked || visibleEmployees.length === 0}
                   className={`${BTN.primary} ${BTN_SIZE.md} sm:h-11 sm:px-5 lg:h-10`}
-                  title="Enable editing"
+                  title={locked ? "This payroll period is closed" : "Enable editing"}
                 >
-                  <Icon name="pencil" size={16} strokeWidth={2.25} />
-                  Edit
+                  <Icon name={locked ? "lock" : "pencil"} size={16} strokeWidth={2.25} />
+                  {locked ? "Locked" : "Edit"}
                 </button>
               )}
             </div>
@@ -679,6 +717,25 @@ export default function SchedulerPage({ role, onDirtyChange }) {
           )}
         </div>
       </div>
+
+      {locked && showEditAction && (
+        <div className="flex items-center gap-3 rounded-2xl bg-slate-100 ring-1 ring-inset ring-slate-200 px-3 sm:px-4 py-2.5 text-xs sm:text-sm text-slate-700 animate-fade-in">
+          <span
+            className="w-7 h-7 rounded-lg bg-white text-slate-500 ring-1 ring-slate-200 grid place-items-center shrink-0"
+            aria-hidden="true"
+          >
+            <Icon name="lock" size={14} strokeWidth={2.5} />
+          </span>
+          <span className="flex-1 min-w-0">
+            <strong className="font-semibold">Locked</strong> — this payroll period is closed, so it
+            can be viewed and printed but not changed. Schedules from{" "}
+            <strong className="font-semibold">
+              {MONTHS[Number(editableFrom.iso.slice(5, 7)) - 1].slice(0, 3)} {editableFrom.day}
+            </strong>{" "}
+            onwards can still be edited.
+          </span>
+        </div>
+      )}
 
       {editing && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-amber-50 ring-1 ring-inset ring-amber-200/80 px-3 sm:px-4 py-2.5 text-xs sm:text-sm text-amber-900 animate-fade-in">
