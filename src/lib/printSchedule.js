@@ -92,7 +92,9 @@ export function printSchedule({
   const shiftCss = settings.shifts
     .map(
       (s, i) =>
-        `  td.cell.shift-${i}, .swatch.shift-${i} { background: ${s.print[0]} !important; color: ${s.print[1]} !important; }`,
+        // Grid cells: fill only (their text is black, see the end of the styles).
+        `  td.cell.shift-${i} { background: ${s.print[0]} !important; }
+  .swatch.shift-${i} { background: ${s.print[0]} !important; color: #000 !important; }`,
     )
     .join("\n");
 
@@ -277,9 +279,9 @@ export function printSchedule({
   }
 
   :root {
-    --ink: #111827;
-    --muted: #4b5563;
-    --faint: #6b7280;
+    --ink: #000;
+    --muted: #000; /* grey newsprint paper: no grey text anywhere */
+    --faint: #000;
     --line: #c3c8cf;
     --grid: #000; /* grid lines: black, so they show on grey / newsprint paper */
     --frame: #000;
@@ -328,7 +330,7 @@ export function printSchedule({
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--brand);
+    color: var(--ink);
   }
   .doc-title {
     margin: 0.6mm 0 0;
@@ -586,6 +588,10 @@ ${shiftCss}
     color: var(--muted);
     text-align: center;
   }
+
+  /* Grey newsprint: every letter in the grid is black (cell fills keep their
+     colors). Last, so it wins over the colored text above. */
+  table th, table td, table th *, table td * { color: #000 !important; }
 </style>
 </head>
 <body>
