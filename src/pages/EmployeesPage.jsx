@@ -79,8 +79,9 @@ export default function EmployeesPage({ role }) {
   }
 
   // Reload after an add / edit / delete.
+  // The current list stays on screen meanwhile (no skeleton), so the page
+  // keeps its scroll position.
   async function loadEmployees() {
-    setLoading(true);
     applyEmployees(await fetchEmployees());
   }
 

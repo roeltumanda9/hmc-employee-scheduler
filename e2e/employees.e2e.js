@@ -53,3 +53,27 @@ test("add an employee (next number), edit them, then delete them", async ({ page
   const { data: left } = await c.from("employees").select("id").eq("name", name);
   expect(left).toEqual([]);
 });
+
+test("saving an edit keeps the page where it was scrolled to", async ({ page }) => {
+  // Short window, so the test employees are below the fold.
+  await page.setViewportSize({ width: 1280, height: 420 });
+  await signIn(page, SUPER_ADMIN, { start: "employees" });
+  const edit = page.getByRole("button", { name: `Edit ${fullName("ALPHA")}` });
+  await edit.scrollIntoViewIfNeeded();
+  const before = await page.evaluate(() => window.scrollY);
+  expect(before).toBeGreaterThan(0);
+  // Every scroll position from here on: the list must never jump up while it reloads.
+  await page.evaluate(() => {
+    window.__scrolls = [];
+    addEventListener("scroll", () => window.__scrolls.push(window.scrollY));
+  });
+
+  await edit.click();
+  const form = page.getByRole("dialog");
+  await form.getByRole("button", { name: "Save changes" }).click();
+  await expect(form).toHaveCount(0);
+  await page.waitForLoadState("networkidle");
+  const scrolls = await page.evaluate(() => window.__scrolls);
+  expect(Math.min(before, ...scrolls)).toBe(before);
+  expect(await page.evaluate(() => window.scrollY)).toBe(before);
+});
