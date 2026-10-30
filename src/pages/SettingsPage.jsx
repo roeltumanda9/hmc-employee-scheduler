@@ -735,12 +735,14 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
     }));
   }
 
-  function moveShift(code, delta) {
+  // Swaps two shifts' places (ShiftEditor passes the visible neighbour, so
+  // codes it doesn't list, like leave types, stay where they are).
+  function swapShifts(a, b) {
     setForm((f) => {
       const list = [...f.shifts];
-      const i = list.indexOf(code);
-      const j = i + delta;
-      if (i < 0 || j < 0 || j >= list.length) return f;
+      const i = list.indexOf(a);
+      const j = list.indexOf(b);
+      if (i < 0 || j < 0) return f;
       [list[i], list[j]] = [list[j], list[i]];
       return { ...f, shifts: list };
     });
@@ -905,7 +907,7 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
               shifts={form.shifts}
               times={form.shift_times}
               onToggle={toggleShift}
-              onMove={moveShift}
+              onSwap={swapShifts}
               onTime={(code, value) =>
                 setForm((f) => ({ ...f, shift_times: { ...f.shift_times, [code]: value } }))
               }
@@ -956,8 +958,13 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
   );
 }
 
-function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
+function ShiftEditor({ shifts, times, onToggle, onSwap, onTime }) {
   const settings = useSettings();
+  // Only work shifts are listed (leave types are under "Leave" everywhere), so
+  // numbering and moving go by this list, not by the saved one.
+  const listed = shifts
+    .map((code) => findShift(settings, code))
+    .filter((s) => s && !s.isLeave);
   return (
     <fieldset className="space-y-3">
       <legend className="text-xs font-semibold text-slate-700 mb-3">Shifts this department can use</legend>
@@ -984,11 +991,10 @@ function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
         })}
       </div>
 
-      {shifts.length > 0 && (
+      {listed.length > 0 && (
         <ul className="divide-y divide-slate-100 rounded-xl ring-1 ring-inset ring-slate-900/[0.07] overflow-hidden">
-          {shifts.map((code, i) => {
-            const s = findShift(settings, code);
-            if (!s || s.isLeave) return null;
+          {listed.map((s, i) => {
+            const code = s.code;
             return (
               <li key={code} className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 px-3 py-2.5 bg-white">
                 <span className="w-6 text-right text-xs font-medium text-slate-400 tabular-nums" aria-hidden="true">
@@ -1006,10 +1012,10 @@ function ShiftEditor({ shifts, times, onToggle, onMove, onTime }) {
                   aria-label={`${s.label} time for this department`}
                 />
                 <span className="flex gap-0.5">
-                  <button type="button" onClick={() => onMove(code, -1)} disabled={i === 0} aria-label={`Move ${code} up`} className={`${BTN.ghost} ${BTN_SIZE.iconSm}`}>
+                  <button type="button" onClick={() => onSwap(code, listed[i - 1].code)} disabled={i === 0} aria-label={`Move ${code} up`} className={`${BTN.ghost} ${BTN_SIZE.iconSm}`}>
                     <Icon name="chevronUp" size={15} strokeWidth={2.5} />
                   </button>
-                  <button type="button" onClick={() => onMove(code, 1)} disabled={i === shifts.length - 1} aria-label={`Move ${code} down`} className={`${BTN.ghost} ${BTN_SIZE.iconSm}`}>
+                  <button type="button" onClick={() => onSwap(code, listed[i + 1].code)} disabled={i === listed.length - 1} aria-label={`Move ${code} down`} className={`${BTN.ghost} ${BTN_SIZE.iconSm}`}>
                     <Icon name="chevronDown" size={15} strokeWidth={2.5} />
                   </button>
                 </span>
