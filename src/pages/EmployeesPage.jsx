@@ -8,6 +8,7 @@ import BiometricDropZone from "../components/BiometricDropZone";
 import ConfirmModal from "../components/ConfirmModal";
 import ErrorBanner from "../components/ErrorBanner";
 import { canManageEmployees } from "../lib/auth";
+import { IS_DEMO } from "../lib/brand";
 import { friendlyError } from "../lib/errors";
 import { buildFullName } from "../lib/format";
 import { MAX_LEAVE_DAYS_PER_YEAR } from "../lib/leave";
@@ -229,8 +230,9 @@ export default function EmployeesPage({ role }) {
         />
       )}
 
-      {/* Biometric import: drop a new export to update names and departments. */}
-      {canManage && (
+      {/* Biometric import: drop a new export to update names and departments.
+          Hidden in the portfolio demo (it needs a real ATT2000 export). */}
+      {canManage && !IS_DEMO && (
         <BiometricDropZone
           employees={employees}
           disabled={loading}
