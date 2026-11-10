@@ -38,13 +38,13 @@ const DEPARTMENTS = [
   ...d,
   sort_order: i + 1,
   active: true,
-  banner_url: "/banner.svg",
+  banner_url: "/logo-banner.png",
   shift_times: {},
 }));
 
 const PRINT_SETTINGS = {
   id: 1,
-  default_banner_url: "/banner.svg",
+  default_banner_url: "/logo-banner.png",
   default_prepared_by_name: "HR OFFICE",
   default_prepared_by_title: "Human Resources",
   checked_by_name: "MICHAEL DAVIS",

@@ -56,10 +56,10 @@ const REAL_DEPARTMENTS = [
 ];
 
 const DEMO_DEPARTMENTS = [
-  { name: "Outpatient Clinic", banner_url: "/banner.svg", shifts: ["DUTY", "MS", "OFF"], shift_times: {} },
-  { name: "Nursing", banner_url: "/banner.svg", shifts: ["AM", "PM", "NS", "OFF"], shift_times: {} },
-  { name: "Laboratory", banner_url: "/banner.svg", shifts: ["AM", "DUTY", "OFF"], shift_times: {} },
-  { name: "Pharmacy", banner_url: "/banner.svg", shifts: ["AM", "PM", "OFF"], shift_times: {} },
+  { name: "Outpatient Clinic", banner_url: "/logo-banner.png", shifts: ["DUTY", "MS", "OFF"], shift_times: {} },
+  { name: "Nursing", banner_url: "/logo-banner.png", shifts: ["AM", "PM", "NS", "OFF"], shift_times: {} },
+  { name: "Laboratory", banner_url: "/logo-banner.png", shifts: ["AM", "DUTY", "OFF"], shift_times: {} },
+  { name: "Pharmacy", banner_url: "/logo-banner.png", shifts: ["AM", "PM", "OFF"], shift_times: {} },
 ];
 
 export const FALLBACK_DEPARTMENTS = (IS_DEMO ? DEMO_DEPARTMENTS : REAL_DEPARTMENTS).map((d, i) => ({
