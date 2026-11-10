@@ -1,7 +1,10 @@
 // Built-in department settings, used only until the `departments` table loads
 // or if it can't be loaded. The real values are edited on the Settings page.
 // Staff names are deliberately left out: they live only in the database.
-export const FALLBACK_DEPARTMENTS = [
+// The portfolio demo uses its own made-up list (these names don't ship).
+import { IS_DEMO, DEFAULT_BANNER_URL } from "./brand";
+
+const REAL_DEPARTMENTS = [
   {
     name: "Amysthetic",
     banner_url: "/logo-banner-amystethic.png",
@@ -50,7 +53,16 @@ export const FALLBACK_DEPARTMENTS = [
     shifts: ["RS", "LS", "ES", "IL", "OFF"],
     shift_times: {},
   },
-].map((d, i) => ({
+];
+
+const DEMO_DEPARTMENTS = [
+  { name: "Outpatient Clinic", banner_url: "/banner.svg", shifts: ["DUTY", "MS", "OFF"], shift_times: {} },
+  { name: "Nursing", banner_url: "/banner.svg", shifts: ["AM", "PM", "NS", "OFF"], shift_times: {} },
+  { name: "Laboratory", banner_url: "/banner.svg", shifts: ["AM", "DUTY", "OFF"], shift_times: {} },
+  { name: "Pharmacy", banner_url: "/banner.svg", shifts: ["AM", "PM", "OFF"], shift_times: {} },
+];
+
+export const FALLBACK_DEPARTMENTS = (IS_DEMO ? DEMO_DEPARTMENTS : REAL_DEPARTMENTS).map((d, i) => ({
   sort_order: i + 1,
   active: true,
   prepared_by_name: "",
@@ -59,7 +71,7 @@ export const FALLBACK_DEPARTMENTS = [
 }));
 
 export const FALLBACK_PRINT = {
-  default_banner_url: "/logo-banner.png",
+  default_banner_url: DEFAULT_BANNER_URL,
   default_prepared_by_name: "",
   default_prepared_by_title: "",
   checked_by_name: "",

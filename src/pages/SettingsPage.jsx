@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { DEFAULT_BANNER_URL } from "../lib/brand";
 import {
   PROTECTED_SHIFTS,
   SHIFT_CODE_PATTERN,
@@ -898,7 +899,7 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
                 <input className={INPUT} value={form.prepared_by_title} onChange={(e) => update("prepared_by_title", e.target.value)} />
               </Field>
               <Field label="Print banner image" hint="Path to an image in the app's public folder. Empty uses the default banner.">
-                <input className={INPUT} list="banner-suggestions" value={form.banner_url} onChange={(e) => update("banner_url", e.target.value)} placeholder="/logo-banner.png" />
+                <input className={INPUT} list="banner-suggestions" value={form.banner_url} onChange={(e) => update("banner_url", e.target.value)} placeholder={DEFAULT_BANNER_URL} />
               </Field>
               <BannerPreview src={form.banner_url} />
             </div>

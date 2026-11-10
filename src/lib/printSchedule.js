@@ -1,3 +1,4 @@
+import { DEFAULT_BANNER_URL } from "./brand";
 import { MONTHS, periodTitle } from "./dates";
 import { findDepartment, leaveChecker, resolveShift } from "./settings";
 import { isWorking, tallyDays } from "./statuses";
@@ -75,7 +76,7 @@ export function printSchedule({
   const deptConfig = isAllDepts ? null : findDepartment(settings, dept);
   const sig = settings.print;
   const banner =
-    deptConfig?.banner_url || sig.default_banner_url || "/logo-banner.png";
+    deptConfig?.banner_url || sig.default_banner_url || DEFAULT_BANNER_URL;
   const bannerUrl = new URL(banner, window.location.origin).href;
 
   const rangeTitle = periodTitle(days, month, year);

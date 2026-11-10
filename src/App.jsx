@@ -11,6 +11,8 @@ import { useAutoLogout } from "./lib/useAutoLogout";
 import IdleWarningModal from "./components/IdleWarningModal";
 import ConfirmModal from "./components/ConfirmModal";
 import Icon from "./components/Icon";
+import { APP_NAME, IS_DEMO, LOGO_URL } from "./lib/brand";
+import { resetDemoData } from "./lib/demoClient";
 import { BTN, BTN_SIZE, CARD, EYEBROW, SPINNER } from "./lib/ui";
 
 export default function App() {
@@ -281,13 +283,13 @@ export default function App() {
         <div className="px-4 pt-5 pb-4 flex items-start justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <img
-              src="/logo.png"
-              alt="Hofileña Medical Centrum"
+              src={LOGO_URL}
+              alt={APP_NAME}
               className="w-12 h-12 rounded-full bg-white p-0.5 shrink-0 ring-1 ring-slate-900/[0.08] shadow-card"
             />
             <div className="min-w-0">
               <h1 className="text-[0.9375rem] font-semibold tracking-tight leading-tight text-slate-900">
-                Hofileña Medical Centrum
+                {APP_NAME}
               </h1>
               <p className="text-xs text-green-700 font-medium leading-tight mt-1">
                 Employee Scheduler
@@ -342,6 +344,7 @@ export default function App() {
 
         {/* Footer: signed in as + role + sign out */}
         <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-slate-100 space-y-1.5">
+          {IS_DEMO && <DemoNotice />}
           <div className="min-w-0 px-3 py-2">
             <p className="text-[0.625rem] uppercase tracking-wider font-semibold text-slate-400">
               Signed in as
@@ -388,7 +391,7 @@ export default function App() {
 
             <div className="min-w-0">
               <p className="text-[0.625rem] uppercase tracking-[0.12em] text-slate-400 font-semibold leading-tight truncate md:hidden">
-                Hofileña Medical Centrum
+                {APP_NAME}
               </p>
               <h2 className="text-lg md:text-xl font-semibold text-slate-900 tracking-tight leading-tight truncate">
                 {pageTitle}
@@ -475,11 +478,35 @@ export default function App() {
   );
 }
 
+// Portfolio demo only: explains the fake data and offers a fresh start.
+function DemoNotice() {
+  function reset() {
+    resetDemoData();
+    window.location.reload();
+  }
+
+  return (
+    <div className="rounded-xl bg-amber-50 ring-1 ring-inset ring-amber-200/80 px-3 py-2.5 text-xs text-amber-900 leading-relaxed">
+      <p className="font-semibold">Demo mode</p>
+      <p className="mt-0.5">
+        Made-up data, saved only in this browser. Sign out to try another role.
+      </p>
+      <button
+        type="button"
+        onClick={reset}
+        className="mt-1.5 font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-950"
+      >
+        Reset demo data
+      </button>
+    </div>
+  );
+}
+
 function FullScreenLoader() {
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center gap-5">
       <img
-        src="/logo.png"
+        src={LOGO_URL}
         alt=""
         className="w-14 h-14 rounded-full bg-white p-0.5 ring-1 ring-slate-900/[0.08] shadow-raised"
       />
