@@ -42,3 +42,7 @@ playwright-report/
 
 # Supabase SQL (kept locally, not published)
 supabase/
+
+# End-to-end tests (kept locally, not published)
+e2e/
+playwright.config.js
