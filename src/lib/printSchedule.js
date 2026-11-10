@@ -1,5 +1,5 @@
 import { DEFAULT_BANNER_URL } from "./brand";
-import { MONTHS, periodTitle } from "./dates";
+import { MONTHS, PERIOD_LABELS, periodTitle } from "./dates";
 import { findDepartment, leaveChecker, resolveShift } from "./settings";
 import { isWorking, tallyDays } from "./statuses";
 
@@ -82,7 +82,7 @@ export function printSchedule({
   const rangeTitle = periodTitle(days, month, year);
   const rangeDates = dateRange(days);
   const halfLabel = half === 1 ? "1st period" : "2nd period";
-  const halfDays = half === 1 ? "27th – 11th" : "12th – 26th";
+  const halfDays = PERIOD_LABELS[half].days;
 
   // One CSS class per shift type, colored from its palette entry (trusted
   // values from src/lib/statuses.js). Indexed rather than derived from the

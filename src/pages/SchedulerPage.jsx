@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MONTHS,
   FIRST_MONTH,
+  PERIOD_LABELS,
   MONTHS_AHEAD,
   MONTHS_BACK,
   addMonths,
@@ -584,10 +585,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
               aria-label="Payroll period"
               className="inline-flex h-10 sm:h-11 lg:h-10 p-1 rounded-xl bg-slate-100 ring-1 ring-inset ring-slate-900/[0.04]"
             >
-              {[
-                { value: 1, short: "27–11", long: "1st · 27–11" },
-                { value: 2, short: "12–26", long: "2nd · 12–26" },
-              ].map((p) => (
+              {[1, 2].map((value) => ({ value, ...PERIOD_LABELS[value] })).map((p) => (
                 <button
                   key={p.value}
                   onClick={() => {
@@ -891,7 +889,7 @@ export default function SchedulerPage({ role, onDirtyChange }) {
             <strong className="text-slate-700">
               {months[month - 1]} {year}
             </strong>{" "}
-            ({half === 1 ? "1st Period (27 – 11)" : "2nd Period (12 – 26)"}).
+            ({half === 1 ? "1st" : "2nd"} Period ({PERIOD_LABELS[half].range})).
             <span className="block text-xs text-rose-600 font-medium mt-2">
               Changes are still pending until you click Save.
             </span>

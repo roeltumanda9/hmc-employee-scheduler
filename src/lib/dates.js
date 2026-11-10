@@ -1,3 +1,5 @@
+import { IS_DEMO } from "./brand";
+
 /**
  * Returns the days for a payroll period.
  * @param {number} year   Anchor year (the month the period ends in)
@@ -8,7 +10,11 @@
 export function getPayrollPeriodDays(year, month, period) {
   let start, end;
 
-  if (period === 1) {
+  if (IS_DEMO) {
+    // Portfolio demo: plain half-months, 1 → 15 and 16 → end of month.
+    start = new Date(year, month - 1, period === 1 ? 1 : 16);
+    end = period === 1 ? new Date(year, month - 1, 15) : new Date(year, month, 0);
+  } else if (period === 1) {
     // Start = 27th of the previous month
     let pM = month - 1;
     let pY = year;
@@ -108,7 +114,22 @@ export const MONTHS_AHEAD = 2;
 
 // The first month the Scheduler shows: schedules start with its 1st period
 // (27 Oct – 11 Nov 2026). Nothing before it can be opened.
-export const FIRST_MONTH = { year: 2026, month: 11 };
+// The demo has no real start date, so only MONTHS_BACK limits it.
+export const FIRST_MONTH = IS_DEMO ? { year: 2000, month: 1 } : { year: 2026, month: 11 };
+
+/**
+ * Period names for the buttons, print sheet and messages:
+ * short "27–11", long "1st · 27–11", days "27th – 11th", range "27 – 11".
+ */
+export const PERIOD_LABELS = IS_DEMO
+  ? {
+      1: { short: "1–15", long: "1st · 1–15", days: "1st – 15th", range: "1 – 15" },
+      2: { short: "16–End", long: "2nd · 16–End", days: "16th – end of month", range: "16 – end" },
+    }
+  : {
+      1: { short: "27–11", long: "1st · 27–11", days: "27th – 11th", range: "27 – 11" },
+      2: { short: "12–26", long: "2nd · 12–26", days: "12th – 26th", range: "12 – 26" },
+    };
 
 /**
  * The payroll period a date falls in, as { year, month, half }:
@@ -119,6 +140,7 @@ export function periodContaining(date) {
   const y = date.getFullYear();
   const m = date.getMonth() + 1;
   const d = date.getDate();
+  if (IS_DEMO) return { year: y, month: m, half: d >= 16 ? 2 : 1 };
   if (d >= 27) return { ...addMonths(y, m, 1), half: 1 };
   return { year: y, month: m, half: d >= 12 ? 2 : 1 };
 }
