@@ -39,3 +39,6 @@ playwright-report/
 # Biometric (ATT2000) exports: staff names and attendance, never commit
 *.xls
 *.xlsx
+
+# Supabase SQL (kept locally, not published)
+supabase/
