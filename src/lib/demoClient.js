@@ -12,7 +12,8 @@ import { MAX_LEAVE_DAYS_PER_YEAR } from "./leave";
  * leave limit, cascades and the change-history trigger.
  */
 
-const DB_KEY = "hmc_demo_db";
+// Bump the version when the seed changes, so visitors get the new data.
+const DB_KEY = "hmc_demo_db_v2";
 const SESSION_KEY = "hmc_demo_session";
 const LATENCY_MS = 120;
 

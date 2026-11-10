@@ -30,9 +30,9 @@ const SHIFT_TYPES = [
 }));
 
 const DEPARTMENTS = [
-  { name: "Outpatient Clinic", shifts: ["DUTY", "MS", "OFF"], prepared_by_name: "DR. ANA REYES", prepared_by_title: "Clinic Head" },
-  { name: "Nursing", shifts: ["AM", "PM", "NS", "OFF"], prepared_by_name: "MARIA SANTOS, RN", prepared_by_title: "Chief Nurse" },
-  { name: "Laboratory", shifts: ["AM", "DUTY", "OFF"], prepared_by_name: "JOSE CRUZ, RMT", prepared_by_title: "Lab Supervisor" },
+  { name: "Outpatient Clinic", shifts: ["DUTY", "MS", "OFF"], prepared_by_name: "DR. JANE SMITH", prepared_by_title: "Clinic Head" },
+  { name: "Nursing", shifts: ["AM", "PM", "NS", "OFF"], prepared_by_name: "MARY JOHNSON, RN", prepared_by_title: "Chief Nurse" },
+  { name: "Laboratory", shifts: ["AM", "DUTY", "OFF"], prepared_by_name: "ROBERT BROWN, RMT", prepared_by_title: "Lab Supervisor" },
   { name: "Pharmacy", shifts: ["AM", "PM", "OFF"], prepared_by_name: "", prepared_by_title: "" },
 ].map((d, i) => ({
   ...d,
@@ -47,30 +47,30 @@ const PRINT_SETTINGS = {
   default_banner_url: "/banner.svg",
   default_prepared_by_name: "HR OFFICE",
   default_prepared_by_title: "Human Resources",
-  checked_by_name: "LUIS MENDOZA",
+  checked_by_name: "MICHAEL DAVIS",
   checked_by_title: "Operations Manager",
-  approved_by_name: "DR. CARMEN VILLANUEVA",
+  approved_by_name: "DR. SARAH WILSON",
   approved_by_title: "Medical Director",
 };
 
 // [first, middle, last, department, job title]
 const PEOPLE = [
-  ["Andrea", "Lopez", "Bautista", "Outpatient Clinic", "Physician"],
-  ["Mark", "Diaz", "Castillo", "Outpatient Clinic", "Physician"],
-  ["Joy", "", "Ramos", "Outpatient Clinic", "Clinic Assistant"],
-  ["Paolo", "Garcia", "Navarro", "Outpatient Clinic", "Receptionist"],
-  ["Grace", "Torres", "Dela Cruz", "Nursing", "Staff Nurse"],
-  ["Kevin", "Morales", "Aquino", "Nursing", "Staff Nurse"],
-  ["Liza", "", "Fernandez", "Nursing", "Staff Nurse"],
-  ["Ramon", "Flores", "Gonzales", "Nursing", "Nursing Aide"],
-  ["Bea", "Rivera", "Salazar", "Nursing", "Staff Nurse"],
-  ["Nico", "Herrera", "Domingo", "Nursing", "Nursing Aide"],
-  ["Clarisse", "Ocampo", "Valdez", "Laboratory", "Medical Technologist"],
-  ["Jerome", "", "Pascual", "Laboratory", "Medical Technologist"],
-  ["Trisha", "Mercado", "Santiago", "Laboratory", "Phlebotomist"],
-  ["Dennis", "Robles", "Manalo", "Pharmacy", "Pharmacist"],
-  ["Kim", "Soriano", "Tolentino", "Pharmacy", "Pharmacy Assistant"],
-  ["Arvin", "", "Galang", "Pharmacy", "Pharmacy Assistant"],
+  ["John", "Adams", "Doe", "Outpatient Clinic", "Physician"],
+  ["Jane", "Baker", "Doe", "Outpatient Clinic", "Physician"],
+  ["Alex", "", "Smith", "Outpatient Clinic", "Clinic Assistant"],
+  ["Sam", "Carter", "Taylor", "Outpatient Clinic", "Receptionist"],
+  ["Emily", "Clark", "Brown", "Nursing", "Staff Nurse"],
+  ["David", "Evans", "Miller", "Nursing", "Staff Nurse"],
+  ["Laura", "", "Wilson", "Nursing", "Staff Nurse"],
+  ["James", "Foster", "Moore", "Nursing", "Nursing Aide"],
+  ["Anna", "Gray", "Thomas", "Nursing", "Staff Nurse"],
+  ["Chris", "Hall", "Jackson", "Nursing", "Nursing Aide"],
+  ["Kate", "Hill", "White", "Laboratory", "Medical Technologist"],
+  ["Peter", "", "Harris", "Laboratory", "Medical Technologist"],
+  ["Lisa", "King", "Martin", "Laboratory", "Phlebotomist"],
+  ["Mark", "Lewis", "Thompson", "Pharmacy", "Pharmacist"],
+  ["Amy", "Young", "Walker", "Pharmacy", "Pharmacy Assistant"],
+  ["Tom", "", "Wright", "Pharmacy", "Pharmacy Assistant"],
 ];
 
 const EMPLOYEES = PEOPLE.map(([first, middle, last, department, role], i) => {
