@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { APP_NAME, EMAIL_PLACEHOLDER, IS_DEMO, LOGO_URL } from "../lib/brand";
+import { APP_NAME, EMAIL_PLACEHOLDER, LOGO_URL } from "../lib/brand";
 import Icon from "../components/Icon";
-import { BTN, BTN_SIZE, CARD, INPUT, LABEL, SPINNER, SPINNER_ON_BRAND } from "../lib/ui";
-import { DEMO_USERS } from "../lib/demoSeed";
+import { BTN, BTN_SIZE, CARD, INPUT, LABEL, SPINNER_ON_BRAND } from "../lib/ui";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -50,9 +49,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {IS_DEMO ? (
-          <DemoSignIn />
-        ) : (
         <form
           onSubmit={handleSubmit}
           className={`${CARD} shadow-raised p-6 sm:p-7 space-y-5`}
@@ -116,9 +112,7 @@ export default function LoginPage() {
             )}
           </button>
         </form>
-        )}
 
-        {!IS_DEMO && (
         <div className="mt-5 px-2 space-y-1 text-xs text-slate-500 text-center text-balance leading-relaxed">
           <p>
             <Icon name="lock" size={12} className="inline-block -mt-0.5 mr-1.5" />
@@ -130,68 +124,7 @@ export default function LoginPage() {
             For security, you're signed out after 15 minutes of inactivity.
           </p>
         </div>
-        )}
       </div>
-    </div>
-  );
-}
-
-// Portfolio demo: one click per role, no passwords (see src/lib/demoClient.js).
-const DEMO_ROLES = [
-  { role: "super_admin", title: "Super Admin", text: "Manage employees, settings and schedules" },
-  { role: "admin", title: "Admin", text: "Edit and print schedules" },
-  { role: "user", title: "Viewer", text: "Read-only access" },
-];
-
-function DemoSignIn() {
-  const [busy, setBusy] = useState("");
-  const [error, setError] = useState("");
-
-  async function signIn(role) {
-    const user = DEMO_USERS.find((u) => u.role === role);
-    setError("");
-    setBusy(role);
-    const { error } = await supabase.auth.signInWithPassword({ email: user.email, password: "demo" });
-    setBusy("");
-    if (error) setError(error.message);
-  }
-
-  return (
-    <div className={`${CARD} shadow-raised p-6 sm:p-7 space-y-4`}>
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900 tracking-tight">Try the demo</h2>
-        <p className="text-sm text-slate-500 mt-1 text-pretty">
-          A working copy with made-up staff. Changes are saved only in your browser.
-        </p>
-      </div>
-
-      <div className="space-y-2.5">
-        {DEMO_ROLES.map(({ role, title, text }) => (
-          <button
-            key={role}
-            type="button"
-            disabled={!!busy}
-            onClick={() => signIn(role)}
-            className={`${BTN.secondary} w-full justify-between text-left px-4 py-2.5 text-sm`}
-          >
-            <span className="min-w-0 flex-1 text-left">
-              <span className="block font-semibold text-slate-900">{title}</span>
-              <span className="block truncate text-xs font-normal text-slate-500">{text}</span>
-            </span>
-            {busy === role ? (
-              <span className={`${SPINNER} w-4 h-4 shrink-0`} />
-            ) : (
-              <Icon name="chevronRight" size={16} className="shrink-0 text-slate-400" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {error && (
-        <p role="alert" className="text-sm text-rose-700">
-          {error}
-        </p>
-      )}
     </div>
   );
 }

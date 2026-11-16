@@ -1,10 +1,9 @@
 // Built-in department settings, used only until the `departments` table loads
 // or if it can't be loaded. The real values are edited on the Settings page.
 // Staff names are deliberately left out: they live only in the database.
-// The portfolio demo uses its own made-up list (these names don't ship).
-import { IS_DEMO, DEFAULT_BANNER_URL } from "./brand";
+import { DEFAULT_BANNER_URL } from "./brand";
 
-const REAL_DEPARTMENTS = [
+const DEPARTMENTS = [
   {
     name: "Amysthetic",
     banner_url: "/logo-banner-amystethic.png",
@@ -55,14 +54,7 @@ const REAL_DEPARTMENTS = [
   },
 ];
 
-const DEMO_DEPARTMENTS = [
-  { name: "Outpatient Clinic", banner_url: "/logo-banner.png", shifts: ["DUTY", "MS", "OFF"], shift_times: {} },
-  { name: "Nursing", banner_url: "/logo-banner.png", shifts: ["AM", "PM", "NS", "OFF"], shift_times: {} },
-  { name: "Laboratory", banner_url: "/logo-banner.png", shifts: ["AM", "DUTY", "OFF"], shift_times: {} },
-  { name: "Pharmacy", banner_url: "/logo-banner.png", shifts: ["AM", "PM", "OFF"], shift_times: {} },
-];
-
-export const FALLBACK_DEPARTMENTS = (IS_DEMO ? DEMO_DEPARTMENTS : REAL_DEPARTMENTS).map((d, i) => ({
+export const FALLBACK_DEPARTMENTS = DEPARTMENTS.map((d, i) => ({
   sort_order: i + 1,
   active: true,
   prepared_by_name: "",
