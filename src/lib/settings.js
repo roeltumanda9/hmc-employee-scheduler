@@ -22,6 +22,8 @@ export const DEFAULT_SETTINGS = {
   shiftsSource: "defaults",
   // True once supabase/proposed_leave_types.sql has added shift_types.is_leave.
   leaveColumn: false,
+  // True once supabase/proposed_shift_notes.sql has added departments.shift_notes.
+  notesColumn: false,
   shiftsError: "",
 };
 
@@ -39,6 +41,7 @@ function normalizeDepartment(row) {
     prepared_by_title: row.prepared_by_title || "",
     shifts: row.shifts?.length ? row.shifts : ["OFF"],
     shift_times: row.shift_times || {},
+    shift_notes: row.shift_notes || {},
   };
 }
 
@@ -112,6 +115,7 @@ export async function loadSettings() {
     departments: depRes.data.map(normalizeDepartment),
     print,
     ...shiftSettings,
+    notesColumn: depRes.data.some((row) => "shift_notes" in row),
     source: "database",
     loadError: "",
   };
@@ -142,12 +146,16 @@ export function findShift(settings, code) {
   return map.get(code) || null;
 }
 
-// A shift with this department's time override applied.
+// A shift with this department's time override and assignment ("note",
+// e.g. "PHLEB, CM") applied.
 export function resolveShift(settings, code, departmentName) {
   const base = findShift(settings, code);
   if (!base) return null;
-  const time = findDepartment(settings, departmentName)?.shift_times?.[code];
-  return time ? { ...base, time } : base;
+  const dept = findDepartment(settings, departmentName);
+  const time = dept?.shift_times?.[code];
+  const note = dept?.shift_notes?.[code];
+  if (!time && !note) return base;
+  return { ...base, ...(time && { time }), ...(note && { note }) };
 }
 
 // The work shifts a department may use, in its configured order. Leave types

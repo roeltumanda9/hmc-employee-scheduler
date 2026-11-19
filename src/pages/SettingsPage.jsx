@@ -688,10 +688,20 @@ function toForm(d) {
     prepared_by_title: d.prepared_by_title || "",
     shifts: [...(d.shifts || [])],
     shift_times: { ...(d.shift_times || {}) },
+    shift_notes: { ...(d.shift_notes || {}) },
   };
 }
 
-function toPayload(form) {
+function cleanMap(map) {
+  return Object.fromEntries(
+    Object.entries(map)
+      .map(([code, t]) => [code, String(t ?? "").trim()])
+      .filter(([, t]) => t),
+  );
+}
+
+// `withNotes` is false until supabase/proposed_shift_notes.sql adds the column.
+function toPayload(form, withNotes) {
   return {
     name: form.name.trim(),
     sort_order: parseInt(form.sort_order, 10) || 0,
@@ -702,11 +712,8 @@ function toPayload(form) {
     shifts: form.shifts,
     // Kept for every code (not only selected ones) so unticking a shift and
     // ticking it again doesn't lose its time.
-    shift_times: Object.fromEntries(
-      Object.entries(form.shift_times)
-        .map(([code, t]) => [code, String(t ?? "").trim()])
-        .filter(([, t]) => t),
-    ),
+    shift_times: cleanMap(form.shift_times),
+    ...(withNotes && { shift_notes: cleanMap(form.shift_notes) }),
   };
 }
 
@@ -719,8 +726,9 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const panelId = useId();
 
-  const initialPayload = JSON.stringify(toPayload(toForm(department)));
-  const dirty = isNew || JSON.stringify(toPayload(form)) !== initialPayload;
+  const withNotes = settings.notesColumn;
+  const initialPayload = JSON.stringify(toPayload(toForm(department), withNotes));
+  const dirty = isNew || JSON.stringify(toPayload(form, withNotes)) !== initialPayload;
   const renamed = !isNew && form.name.trim() !== department.name;
 
   function update(field, value) {
@@ -750,7 +758,7 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
   }
 
   async function save() {
-    const payload = toPayload(form);
+    const payload = toPayload(form, withNotes);
     if (!payload.name) return setError("Enter a department name.");
     if (payload.shifts.length === 0) return setError("Choose at least one shift.");
 
@@ -907,10 +915,14 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
             <ShiftEditor
               shifts={form.shifts}
               times={form.shift_times}
+              notes={withNotes ? form.shift_notes : null}
               onToggle={toggleShift}
               onSwap={swapShifts}
               onTime={(code, value) =>
                 setForm((f) => ({ ...f, shift_times: { ...f.shift_times, [code]: value } }))
+              }
+              onNote={(code, value) =>
+                setForm((f) => ({ ...f, shift_notes: { ...f.shift_notes, [code]: value.toUpperCase() } }))
               }
             />
           </div>
@@ -959,7 +971,7 @@ function DepartmentCard({ department, isNew = false, onSaved, onCancel }) {
   );
 }
 
-function ShiftEditor({ shifts, times, onToggle, onSwap, onTime }) {
+function ShiftEditor({ shifts, times, notes, onToggle, onSwap, onTime, onNote }) {
   const settings = useSettings();
   // Only work shifts are listed (leave types are under "Leave" everywhere), so
   // numbering and moving go by this list, not by the saved one.
@@ -1012,6 +1024,16 @@ function ShiftEditor({ shifts, times, onToggle, onSwap, onTime }) {
                   placeholder={s.time || "No time"}
                   aria-label={`${s.label} time for this department`}
                 />
+                {notes && code !== "OFF" && (
+                  <input
+                    className={`${INPUT_SM} sm:w-44 order-last sm:order-none basis-full sm:basis-auto uppercase`}
+                    value={notes[code] || ""}
+                    onChange={(e) => onNote(code, e.target.value)}
+                    placeholder="Assignment (optional)"
+                    maxLength={80}
+                    aria-label={`${s.label} assignment for this department, e.g. PHLEB, CM`}
+                  />
+                )}
                 <span className="flex gap-0.5">
                   <button type="button" onClick={() => onSwap(code, listed[i - 1].code)} disabled={i === 0} aria-label={`Move ${code} up`} className={`${BTN.ghost} ${BTN_SIZE.iconSm}`}>
                     <Icon name="chevronUp" size={15} strokeWidth={2.5} />
@@ -1026,7 +1048,7 @@ function ShiftEditor({ shifts, times, onToggle, onSwap, onTime }) {
         </ul>
       )}
       <p className="text-xs text-slate-500 leading-relaxed">
-        Leave a time empty to use the shift's standard time (shown in grey). The order here is the order in the shift picker. Leave types (Sick, Incentive, …) aren't listed: every department can use them, under “Leave”.
+        Leave a time empty to use the shift's standard time (shown in grey). The assignment (e.g. PHLEB, CM) is optional and shows under the shift in the Scheduler and on the printout. The order here is the order in the shift picker. Leave types (Sick, Incentive, …) aren't listed: every department can use them, under “Leave”.
       </p>
     </fieldset>
   );

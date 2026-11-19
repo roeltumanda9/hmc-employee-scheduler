@@ -812,7 +812,8 @@ export default function SchedulerPage({ role, onDirtyChange }) {
       </div>
 
       {/* Shift legend: code, name and time for each shift this department
-          uses. One swipeable row on phones, wrapped from sm up. */}
+          uses (one swipeable row on phones, wrapped from sm up), then the
+          shift assignments on their own line. */}
       {!isAllDepts && legendShifts.length > 0 && (
         <section
           aria-label={`Shifts for ${dept}`}
@@ -850,6 +851,22 @@ export default function SchedulerPage({ role, onDirtyChange }) {
               </li>
             ))}
           </ul>
+
+          {/* Assignments (Settings → Departments), one line like the Excel sheet. */}
+          {legendShifts.some((s) => s.note) && (
+            <dl className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              {legendShifts.filter((s) => s.note).map((s) => (
+                <div key={s.code} className="flex items-center gap-2">
+                  <dt
+                    className={`inline-flex items-center justify-center min-w-[3rem] h-7 rounded-lg px-2 text-xs font-bold tracking-tight shadow-[inset_0_0_0_1px_rgb(15_23_42/0.08)] ${s.classes}`}
+                  >
+                    {s.code}
+                  </dt>
+                  <dd className="font-bold text-slate-900 tracking-wide">{s.note}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
         </section>
       )}
 

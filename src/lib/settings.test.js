@@ -17,7 +17,7 @@ const { makeShift } = await import("./statuses");
 const settings = {
   departments: [
     { name: "H Hotel", active: true, shifts: ["PM", "AM", "GONE", "IL", "OFF"], shift_times: {} },
-    { name: "Wellness", active: false, shifts: ["DUTY", "OFF"], shift_times: { DUTY: "8:00 AM – 5:00 PM" } },
+    { name: "Wellness", active: false, shifts: ["DUTY", "OFF"], shift_times: { DUTY: "8:00 AM – 5:00 PM" }, shift_notes: { DUTY: "CHEM, HEMA" } },
   ],
   shifts: [
     makeShift({ code: "AM", label: "AM Shift", time: "6:00 AM – 2:00 PM", color: "blue" }),
@@ -59,6 +59,11 @@ describe("resolveShift", () => {
 
   it("keeps the standard time without an override", () => {
     expect(resolveShift(settings, "DUTY", "H Hotel").time).toBe("10:00 AM – 7:00 PM");
+  });
+
+  it("adds the department assignment as note", () => {
+    expect(resolveShift(settings, "DUTY", "Wellness").note).toBe("CHEM, HEMA");
+    expect(resolveShift(settings, "DUTY", "H Hotel").note).toBeUndefined();
   });
 });
 

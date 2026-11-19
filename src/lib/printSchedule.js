@@ -266,6 +266,15 @@ export function printSchedule({
     )
     .join("");
 
+  // Shift assignments (Settings → Departments), one line under the legend.
+  const assignments = legendItems
+    .filter((s) => s.note)
+    .map(
+      (s) =>
+        `<span class="chip"><span class="swatch ${shiftClass.get(s.code) || ""}">${escapeHtml(s.code)}</span><span class="assign">${escapeHtml(s.note)}</span></span>`,
+    )
+    .join("");
+
   const html = `
 <!DOCTYPE html>
 <html lang="en">
@@ -406,6 +415,8 @@ export function printSchedule({
   }
   .chip-label { font-size: 7.5pt; font-weight: 600; }
   .chip-time { font-size: 7pt; color: var(--faint); margin-left: 1.2mm; }
+  .legend + .legend { margin-top: -2mm; }
+  .assign { font-size: 8pt; font-weight: 800; color: var(--ink); white-space: nowrap; }
 
   /* ---------- Schedule table ---------- */
   table {
@@ -618,6 +629,7 @@ ${shiftCss}
   </header>
 
   ${legendItems.length ? `<div class="legend"><span class="legend-title">Legend</span>${legend}</div>` : ""}
+  ${assignments ? `<div class="legend">${assignments}</div>` : ""}
 
   <table>
     <colgroup>
